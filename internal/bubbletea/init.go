@@ -1,0 +1,102 @@
+
+package bubbletea
+
+import (
+	"github.com/alex0esc/ceres/internal/server"
+	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// item type in the selectalbe list
+type listItem struct {
+	botName string
+	botDesc string
+}
+
+func (item listItem) FilterValue() string { return item.botName }
+func (item listItem) Title() string       { return item.botName }
+func (item listItem) Description() string { return item.botDesc }
+
+const (
+	listWidth    = 40
+	footerHeight = 4 // Inputbox: border top + bottom (1 + 3)
+)
+
+func newListDelegate() list.ItemDelegate {
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(1)
+	delegate.SetHeight(10)
+	delegate.ShowDescription = true
+
+	// Selektiertes Item: Orange, mit linkem Balken
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(ThemeColorUser).
+		BorderForeground(ThemeColorUser)
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
+		Foreground(ThemeColorUser).
+		BorderForeground(ThemeColorUser)
+
+	// Normale Items: gedämpftes Grau, damit Orange hervorsticht
+	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.
+		Foreground(ThemeColorInactive)
+	delegate.Styles.NormalDesc = delegate.Styles.NormalDesc.
+		Foreground(ThemeColorInactive)
+
+
+	return delegate
+}
+
+func newList(agents []*agent.Agent) list.Model {
+	listItems := make([]list.Item, len(agents))
+	index := 0
+	for _, val := range agents {
+		listItems[index] = listItem(listItem{
+			botName: val.Name(),
+			botDesc: val.Description(),
+		})
+		index++
+	}
+	l := list.New(listItems, newListDelegate(), listWidth, 0)
+	l.Title = "Agent Chats"
+	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+
+	
+	
+l.Styles.Title = l.Styles.Title.
+	Background(lipgloss.Color("")). // Hintergrund entfernen
+	Foreground(ThemeColorUser).
+	Bold(true).
+	Padding(0, 11)
+
+	return l
+}
+
+func newTextInput() textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = "Send message..."
+	ti.Focus()
+	ti.CharLimit = 280
+	ti.Width = 50
+	return ti
+}
+
+func initialTui(server *server.Server) *Tui {
+	return &Tui{
+		textinput: newTextInput(),
+		list:      newList(server.GetAgentList()),
+		focus:     focusInput,
+		server:    server,
+		inputChan: make(chan TokenMsg, 10),
+	}
+}
+
+func (tui *Tui) Init() tea.Cmd {
+	var cmds []tea.Cmd
+	cmds = append(cmds, waitForToken(tui.inputChan))
+	cmds = append(cmds, textinput.Blink)
+	return tea.Batch(cmds...)
+}
