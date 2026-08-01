@@ -123,11 +123,13 @@ func setNestedValue(m map[string]any, keys []string, value any) {
 	}
 }
 
+
 func convertType[T any](val any) (T, bool) {
 	var zero T
 	if v, ok := val.(T); ok {
 		return v, true
 	}
+
 	switch any(zero).(type) {
 	case int:
 		if v, ok := val.(int64); ok {
@@ -136,6 +138,18 @@ func convertType[T any](val any) (T, bool) {
 	case float64:
 		if v, ok := val.(int64); ok {
 			return any(float64(v)).(T), true
+		}
+	case []string:
+		if rawSlice, ok := val.([]any); ok {
+			strSlice := make([]string, 0, len(rawSlice))
+			for _, item := range rawSlice {
+				if str, ok := item.(string); ok {
+					strSlice = append(strSlice, str)
+				} else {
+					return zero, false 
+				}
+			}
+			return any(strSlice).(T), true
 		}
 	}
 	return zero, false

@@ -15,7 +15,6 @@ import (
 // subdirectory within it.
 type SkillListTool struct{}
 
-const skillListBaseDir = "skills/"
 
 func (SkillListTool) Name() string {
 	return "skill_list"
@@ -59,10 +58,10 @@ func (SkillListTool) Handler() ToolHandler {
 		}
 
 		// Determine target directory and guard against directory traversal.
-		targetDir := filepath.Clean(filepath.Join(skillListBaseDir, args.Subpath))
-		baseClean := filepath.Clean(skillListBaseDir)
+		targetDir := filepath.Clean(filepath.Join(skillBaseDir, args.Subpath))
+		baseClean := filepath.Clean(skillBaseDir)
 		if targetDir != baseClean && !strings.HasPrefix(targetDir, baseClean+string(os.PathSeparator)) {
-			return "", fmt.Errorf("skill_list: subpath %q is outside of %q", args.Subpath, skillListBaseDir)
+			return "", fmt.Errorf("skill_list: subpath %q is outside of %q", args.Subpath, skillBaseDir)
 		}
 
 		info, err := os.Stat(targetDir)
@@ -99,7 +98,7 @@ func (SkillListTool) Handler() ToolHandler {
 				if path == targetDir {
 					return nil
 				}
-				rel, relErr := filepath.Rel(skillListBaseDir, path)
+				rel, relErr := filepath.Rel(skillBaseDir, path)
 				if relErr != nil {
 					rel = path
 				}
@@ -119,7 +118,7 @@ func (SkillListTool) Handler() ToolHandler {
 				return "", fmt.Errorf("skill_list: error reading %q: %w", targetDir, err)
 			}
 			for _, d := range dirEntries {
-				rel := filepath.Join(strings.TrimPrefix(targetDir, filepath.Clean(skillListBaseDir)+string(os.PathSeparator)), d.Name())
+				rel := filepath.Join(strings.TrimPrefix(targetDir, filepath.Clean(skillBaseDir)+string(os.PathSeparator)), d.Name())
 				rel = strings.TrimPrefix(rel, string(os.PathSeparator))
 				if strings.TrimSpace(args.Subpath) == "" {
 					rel = d.Name()

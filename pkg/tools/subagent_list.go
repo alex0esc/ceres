@@ -4,19 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/alex0esc/ceres/pkg/handles"
 )
 
 // SubagentList is a tool that lists all available subagents
 // together with their description.
-type SubagentList struct {
-	agents []handles.AgentHandle
-}
+type SubagentList struct {}
 
-func (t *SubagentList) SetSubagentList(agents []handles.AgentHandle) {
-	t.agents = agents
-}
 
 func (t *SubagentList) Name() string {
 	return "subagent_list"
@@ -38,16 +31,13 @@ func (t *SubagentList) Parameters() map[string]any {
 
 func (t *SubagentList) Handler() ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
-		if len(t.agents) == 0 {
+		if len(getSubagents()) == 0 {
 			return "No subagents available.", nil
 		}
 
 		var sb strings.Builder
-		for _, agnt := range t.agents {
-			busy := "waiting"
-			if agnt.Busy() {
-				busy = "busy"
-			}
+		for _, agnt := range getSubagents() {
+			busy := agnt.State().String()
 			fmt.Fprintf(&sb, "- %s: %s (status: %s)\n", agnt.Name(), agnt.Description(), busy)
 		}
 		return sb.String(), nil

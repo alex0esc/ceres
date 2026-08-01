@@ -1,0 +1,9 @@
+.*
+*.md
+build/
+data_agent/
+data_sandbox/
+config/
+skills/
+agents/
+logs/

@@ -53,6 +53,7 @@ func RunTui(server *server.Server) *tea.Program {
 	program := tea.NewProgram(
 		initialTui(server),
 		tea.WithAltScreen(), // make it full screen
+		tea.WithMouseCellMotion(),
 	)
 
 	if _, err := program.Run(); err != nil {

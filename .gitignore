@@ -1,5 +1,8 @@
-build/*
-config/*
-agents/*
-skills/*
-.ignore
+build/
+config/
+agents/
+skills/
+logs/
+data_agent/
+data_sandbox/
+

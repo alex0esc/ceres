@@ -1,0 +1,27 @@
+services:
+  ceres:
+    build: .
+    container_name: ceres-agent
+    restart: unless-stopped
+    volumes:
+      # Docker socket so Ceres can control the sandbox
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      - ./data_agent:/app
+    depends_on:
+      - sandbox
+    tty: true
+    stdin_open: true
+
+
+  sandbox:
+    image: python:3.11-slim
+    container_name: ceres-sandbox
+
+    working_dir: /workspace
+
+    volumes:
+      - ./data_sandbox:/workspace
+
+    restart: unless-stopped
+    command: tail -f /dev/null

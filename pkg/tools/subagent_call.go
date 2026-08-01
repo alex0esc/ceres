@@ -11,24 +11,9 @@ import (
 
 // SubagentCall is a tool that lets an agent submit tasks to one or more
 // other agents in parallel and wait for all of them to finish.
-type SubagentCall struct {
-	agents []handles.AgentHandle
-}
+type SubagentCall struct {}
 
-// SetAgents stores the list of subagents this tool can dispatch tasks to.
-func (t *SubagentCall) SetSubagentList(agents []handles.AgentHandle) {
-	t.agents = agents
-}
 
-// findAgent looks up a subagent by name.
-func (t *SubagentCall) findAgent(name string) (handles.AgentHandle, bool) {
-	for _, a := range t.agents {
-		if a.Name() == name {
-			return a, true
-		}
-	}
-	return nil, false
-}
 
 func (t *SubagentCall) Name() string {
 	return "subagent_call"
@@ -100,7 +85,7 @@ func (t *SubagentCall) Handler() ToolHandler {
 		// Step 1: submit every task up front so they all run concurrently.
 		pending := make([]pendingCall, 0, len(args.Tasks))
 		for _, task := range args.Tasks {
-			agnt, ok := t.findAgent(task.Agent)
+			agnt, ok := getSubagents()[task.Agent]
 			if !ok {
 				pending = append(pending, pendingCall{
 					agentName: task.Agent,

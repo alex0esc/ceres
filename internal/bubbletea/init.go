@@ -91,6 +91,7 @@ func initialTui(server *server.Server) *Tui {
 		focus:     focusInput,
 		server:    server,
 		inputChan: make(chan TokenMsg, 10),
+		selectedAgent: server.GetAgentList()[0].Name(),
 	}
 }
 

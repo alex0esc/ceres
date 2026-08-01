@@ -1,99 +1,97 @@
 package agent
 
+
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
-	"time"
+	"sync"
 
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/alex0esc/ceres/pkg/handles"
-) 
+)
+
 
 type Agent struct {
-	name   string
+	name        string
 	description string
-	Client *openai.Client
-	busy   chan struct{} //only one task at a time
-	subagent bool
+	Client      *openai.Client
+	subagent    bool
+
+	mutex         sync.Mutex
+	queue         []*task
+	state         handles.AgentState
+	workCh        chan struct{} // signals that there is work to do
 }
 
 func NewAgent(name, description string, client *openai.Client, subagent bool) *Agent {
 	return &Agent{
-		name:   name,
-		Client: client,
+		name:        name,
 		description: description,
-		busy:   make(chan struct{}, 1),
-		subagent: subagent,
+		Client:      client,
+		subagent:    subagent,
+		state:       handles.AgentStateStopped,
+		workCh:      nil,
 	}
 }
 
 
-//struct for context, only used es unique value
+// Resume allows new tasks to be submitted and processed again
+func (agent *Agent) Start() {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	if agent.state != handles.AgentStateStopped {
+		return
+	}
+	agent.workCh = make(chan struct{}, 1)
+	agent.state = handles.AgentStateIdle
+	go agent.worker()
+}
+
+// Stops the agents and interrupts any running task
+func (agent *Agent) Stop() {
+	agent.mutex.Lock()
+	if agent.state == handles.AgentStateStopped {
+		agent.mutex.Unlock()
+		return
+	}
+	agent.state = handles.AgentStateStopped
+	ch := agent.workCh // capture before releasing the lock, so no one can swap it out from under us
+	pending := agent.queue
+	agent.queue = nil
+	agent.mutex.Unlock()
+
+	agent.Client.Interrupt() // potentially slow, runs outside the lock
+
+	for _, t := range pending {
+		t.resultCh <- handles.TaskResult{Err: errors.New("task cancelled: agent stopped")}
+	}
+
+	close(ch)
+}
+
+func (agent *Agent) State() handles.AgentState {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	return agent.state
+}
+
+func (agent *Agent) Name() string        { return agent.name }
+func (agent *Agent) Description() string { return agent.description }
+func (agent *Agent) IsSubagent() bool    { return agent.subagent }
+
+
 type callChainKey struct{}
 
-// WithAgent appends the current agent name to the chain in the context.
+// withAgent appends the current agent name to the call chain stored in the context.
 func withAgent(ctx context.Context, name string) context.Context {
 	chain, _ := ctx.Value(callChainKey{}).([]string)
 	newChain := append(append([]string{}, chain...), name) // copy, don't mutate!
 	return context.WithValue(ctx, callChainKey{}, newChain)
 }
 
-// inChain checks whether an agent name is already present in the current chain.
+// inChain checks whether an agent name is already present in the current call chain.
 func inChain(ctx context.Context, name string) bool {
 	chain, _ := ctx.Value(callChainKey{}).([]string)
 	return slices.Contains(chain, name)
-}
-
-
-
-func (agent *Agent) SubmitTask(ctx context.Context, task string, clearHistory bool, timeout time.Duration) <-chan handles.TaskResult {
-	resultCh := make(chan handles.TaskResult, 1)
-
-	go func() {
-		if inChain(ctx, agent.name) {
-			resultCh <- handles.TaskResult{
-				Err: fmt.Errorf("%w: agent %q calls itself (directly or indirectly)",
-					errors.New("agent cycle detected"), agent.name)}
-			return
-		}
-
-		agent.busy <- struct{}{}
-		defer func() { <-agent.busy }()
-
-		// Important: extend the chain with THIS agent before spawning subtasks
-		ctx = withAgent(ctx, agent.name)
-
-		if timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
-
-		if clearHistory {
-			agent.Client.ClearHistory()
-		}
-
-		resp, err := agent.Client.AskStream(ctx, task)
-		resultCh <- handles.TaskResult{Response: resp, Err: err}
-	}()
-	return resultCh
-}
-
-
-func (agent *Agent) Name() string {
-	return agent.name
-}
-
-func (agent *Agent) Description() string {
-	return agent.description
-}
-
-func (agent *Agent) Busy() bool {
-	return len(agent.busy) == 1
-}
-
-func (agent *Agent) IsSubagent() bool {
-	return agent.subagent
 }

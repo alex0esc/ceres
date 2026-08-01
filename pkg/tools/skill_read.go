@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-const skillReadBaseDir = "skills/"
-
 
 // SkillReadTool reads the contents of a single file within the "skills/"
 // directory. The base path is fixed to "skills/"; the required "path"
@@ -60,10 +58,10 @@ func (SkillReadTool) Handler() ToolHandler {
 		}
 
 		// Determine target file and guard against directory traversal.
-		targetPath := filepath.Clean(filepath.Join(skillReadBaseDir, args.Path))
-		baseClean := filepath.Clean(skillReadBaseDir)
+		targetPath := filepath.Clean(filepath.Join(skillBaseDir, args.Path))
+		baseClean := filepath.Clean(skillBaseDir)
 		if targetPath != baseClean && !strings.HasPrefix(targetPath, baseClean+string(os.PathSeparator)) {
-			return "", fmt.Errorf("skill_read: path %q is outside of %q", args.Path, skillReadBaseDir)
+			return "", fmt.Errorf("skill_read: path %q is outside of %q", args.Path, skillBaseDir)
 		}
 
 		info, err := os.Stat(targetPath)

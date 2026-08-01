@@ -173,12 +173,14 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 			case responses.ResponseOutputItemAddedEvent:
 			    if fc, ok := e.Item.AsAny().(responses.ResponseFunctionToolCall); ok {
 			        lastFcName = fc.Name
+				} 
+				//skip reasoning items
+				if _, ok := e.Item.AsAny().(responses.ResponseReasoningItem); ok {
+					continue
 				}
-				if tempAnswer.Len() > 0 {
-					//mark the end of the current msg generation
-					client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
-					tempAnswer.WriteString("\n\n")
-				}
+				//mark the end of the current msg generation
+				client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
+				tempAnswer.WriteString("\n\n")
 
 			case responses.ResponseFunctionCallArgumentsDoneEvent:
 				// fires as soon as a new output item starts; used here to
@@ -193,11 +195,6 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 				client.TotalTokens = e.Response.Usage.TotalTokens
 			}
 		}
-		//mark the end of the current msg generation
-		if fullAnswer.Len() > 0 {
-			client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
-			fullAnswer.WriteString("\n\n")
-		}		
 
 		fullAnswer.WriteString(tempAnswer.String())
 		

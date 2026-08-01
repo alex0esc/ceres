@@ -21,6 +21,7 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	switch msg := msg.(type) {
+
 	case tea.KeyMsg:
 		cmd := tui.handleKeyMsg(msg)
 		if cmd != nil {
@@ -50,15 +51,6 @@ func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		tui.toggleFocus()
 	case tea.KeyEnter:
 		tui.handleEnter()
-	case tea.KeyUp:
-		if(tui.focus == focusInput) {
-			tui.viewport.ScrollUp(5)
-		}
-	case tea.KeyDown:
-		if(tui.focus == focusInput) {
-			tui.viewport.ScrollDown(5)
-		}
-
 	}
 	tui.applyListSelection()
 	return nil
@@ -141,6 +133,7 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	if !tui.ready {
 		tui.viewport = viewport.New(rightWidth, viewportHeight)
 		tui.viewport.SetContent(tui.getContentString())
+		tui.viewport.MouseWheelDelta = 5
 		tui.ready = true
 	} else {
 		tui.viewport.Width = rightWidth

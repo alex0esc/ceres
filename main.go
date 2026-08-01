@@ -1,56 +1,77 @@
 package main
 
 import (
-	"flag"
+	"bufio"
+	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
+	"path/filepath"
 
 	"github.com/alex0esc/ceres/internal/bubbletea"
 	"github.com/alex0esc/ceres/internal/server"
 )
 
+//create two different writers one for the cli state and one for the tui
+func initLogging() (io.Writer, io.Writer) {
+	if err := os.MkdirAll(filepath.Dir(server.LogFilePath), 0755); err != nil {
+		log.Fatalf("failed to create log directory: %v", err)
+	}
 
-func initLogging(cli bool) {
 	f, err := os.OpenFile(server.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}
-
-	if cli {
-		log.SetOutput(f)
-	} else {
-		log.SetOutput(io.MultiWriter(f, os.Stderr))
-	}
+	
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	return io.MultiWriter(f, os.Stderr), f
+}
+
+//startup sequnce for the server
+func startServer() *server.Server {
+	sv, err := server.NewServer()
+	if err != nil {
+		log.Fatalf("could not load server: %v", err)
+	}
+	err = sv.Initialize()
+	if err != nil {
+		log.Fatalf("could not initialize server: %v", err)
+	}
+	slog.Info("Server started succsessuflly!")
+	return sv
 }
 
 
 func main() {
-	cliMode := flag.Bool("cli", false, "starts the cli to monitor the agents")
-	flag.Parse()
-
 	// make sure errors go into log.txt and the command line if cli is off
-	initLogging(*cliMode)
+	cliWriter, tuiWriter := initLogging()
+	log.SetOutput(cliWriter)
 	
-	sv, err := server.NewServer()
-	if err != nil {
-		log.Fatalf("could not start server: %v", err)
-	}
-	err = sv.StartCroneJobs()
-	if err != nil {
-		log.Fatalf("could not start cronejobs: %v", err)
-	}
+	scanner := bufio.NewScanner(os.Stdin)
+	sv := startServer()		
 
-	
-	if *cliMode {
-		tui := bubbletea.RunTui(sv)
-		tui.Wait()
-	} else {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-		<-sigCh
+	//programm loop to make it possible to reload configs and switch to tui dynamically
+	for {
+		scanner.Scan()
+		if scanner.Err() != nil {
+			log.Fatalf("rror while scanning console input: %v", scanner.Err())
+		}
+
+		switch scanner.Text() {
+		case "exit":
+			sv.Shutdown()
+			return
+		case "tui":
+			log.SetOutput(tuiWriter)
+			tui := bubbletea.RunTui(sv)
+			tui.Wait()
+			log.SetOutput(cliWriter)
+		case "reload":
+			sv.Shutdown()
+			sv = startServer()	
+		default: 
+			fmt.Println("Unkown command: only exit, tui, reload are available!")
+		}	
 	}
 }

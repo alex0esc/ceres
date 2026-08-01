@@ -1,5 +1,5 @@
-
 package tools
+
 
 import (
 	"context"
@@ -77,7 +77,7 @@ func (t *DiscordPost) Handler() ToolHandler {
 		}
 
 		if _, err := t.session.ChannelMessageSend(channelID, args.Message); err != nil {
-			return "", fmt.Errorf("failed to send message: %w", err)
+			return "", fmt.Errorf("failed to send message to discord: %w", err)
 		}
 
 		result := discordPostResult{

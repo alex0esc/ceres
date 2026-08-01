@@ -1,5 +1,6 @@
 package platforms
 
+
 import (
 	"fmt"
 
@@ -10,32 +11,33 @@ import (
 // Holds the global tool config
 var cfg *config.Config = nil
 
-
-// Holds all platforms
-var registry []Platform = []Platform{}
-
+// Holds all platforms keyed by their name
+var registry = make(map[string]Platform)
 
 type Platform interface {
 	Name() string
 	AgentName() string
-	Listen(agent handles.AgentHandle) 
+	Listen(agent handles.AgentHandle)
+	StopListen()
 }
 
 
 func Register(plat Platform) {
-	for _, pl := range registry {
-		if pl.Name() == plat.Name() {
-			panic(fmt.Sprintf("platform %q already registered", pl.Name()))
-		}
+	name := plat.Name()
+	if _, exists := registry[name]; exists {
+		panic(fmt.Sprintf("platform %q already registered", name))
 	}
-	registry = append(registry, plat)
+	registry[name] = plat
 }
 
 
-func All() []Platform {
-    result := make([]Platform, len(registry))
-    copy(result, registry)
-    return result
+// Get returns the platform by name and a boolean indicating whether it was found
+func Get(name string) Platform {
+	plat, exists := registry[name]
+	if !exists {
+		panic(fmt.Sprintf("unknown palform %s", name))
+	} 
+	return plat
 }
 
 
@@ -48,10 +50,9 @@ func LoadPlatformConfig(path string) error {
 	return nil
 }
 
-
 func GetPlatformConfig() *config.Config {
-    if cfg == nil {
-        panic("platforms: config not initialized.")
-    }
-    return cfg
+	if cfg == nil {
+		panic("platforms: config not initialized.")
+	}
+	return cfg
 }

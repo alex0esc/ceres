@@ -1,0 +1,11 @@
+# for the code editor
+.*
+build/
+go.mod
+go.sum
+config/
+agents/
+data_sandbox/
+data_agent/
+skills/
+logs/
