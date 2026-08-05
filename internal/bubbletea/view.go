@@ -59,6 +59,6 @@ func (tui *Tui) styles() (list lipgloss.Style, info lipgloss.Style, input lipglo
 
 func (tui *Tui) getInfoTextString() string {
 	infoColor := lipgloss.NewStyle().Foreground(lipgloss.Color("#FDFD96"))
-	return infoColor.Render(fmt.Sprintf("Tokens: %v", tui.getSelectedAgent().Client.TotalTokens))
+	return infoColor.Render(fmt.Sprintf("Tokens: %v", tui.selectedAgent.Client.TotalTokens))
 
 }

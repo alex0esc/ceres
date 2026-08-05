@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileStrReplaceTool replaces a unique occurrence of a string inside a file
@@ -48,7 +49,7 @@ func (FileStrReplaceTool) Parameters() map[string]any {
 	}
 }
 
-func (FileStrReplaceTool) Handler() ToolHandler {
+func (FileStrReplaceTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Path   string `json:"path"`
@@ -65,9 +66,9 @@ func (FileStrReplaceTool) Handler() ToolHandler {
 			return "", fmt.Errorf("file_str_replace: old_str must not be empty")
 		}
 
-		containerName := config.ReadEntry(GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
 
-		timeout, err := time.ParseDuration(config.ReadEntry(GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
 		if err != nil {
 			return "", fmt.Errorf("file_str_replace: error while parsing sandbox.bash.timeout in toolconfig.toml")
 		}
@@ -128,5 +129,5 @@ func (FileStrReplaceTool) Handler() ToolHandler {
 }
 
 func init() {
-	Register(FileStrReplaceTool{})
+	tool.Register(FileStrReplaceTool{})
 }

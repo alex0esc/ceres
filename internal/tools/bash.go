@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // BashTool executes a shell command inside a separate sandbox container via
@@ -44,7 +45,7 @@ func (BashTool) Parameters() map[string]any {
 	}
 }
 
-func (BashTool) Handler() ToolHandler {
+func (BashTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Command string `json:"command"`
@@ -56,10 +57,10 @@ func (BashTool) Handler() ToolHandler {
 			return "", fmt.Errorf("bash: command must not be empty")
 		}
 
-		containerName := config.ReadEntry(GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
 		
 
-		timeout, err := time.ParseDuration(config.ReadEntry(GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
 		if err != nil {
 			return "", fmt.Errorf("Error while parsing sandbox.bash.timeout in toolconfig.toml")
 		}
@@ -134,5 +135,5 @@ func demuxDockerStream(reader io.Reader, stdout, stderr io.Writer) (int64, error
 }
 
 func init() {
-	Register(BashTool{})
+	tool.Register(BashTool{})
 }

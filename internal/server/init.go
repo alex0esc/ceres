@@ -6,11 +6,15 @@ import (
 	"log"
 	"time"
 
+
+	_ "github.com/alex0esc/ceres/internal/commands"
+	_ "github.com/alex0esc/ceres/internal/platforms"
+
 	"github.com/alex0esc/ceres/internal/cronejob"
+	"github.com/alex0esc/ceres/internal/tools"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/alex0esc/ceres/pkg/platforms"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/platform"
 )
 
 // initializes/starts necessary stuff
@@ -33,7 +37,7 @@ func (sv *Server) Shutdown() {
 		agnt.Stop()
 	}
 	for _, plat := range config.ReadEntry(sv.config, "active_platforms", []string{}) {
-		platforms.Get(plat).StopListen()
+		platform.Get(plat).StopListen()
 	}
 	ctx := sv.croneJobs.Stop()
 	<-ctx.Done()
@@ -53,7 +57,7 @@ func (sv *Server) initSubagentTools() {
 
 func (sv *Server) initPlatforms() {
 	for _, name := range config.ReadEntry(sv.config, "active_platforms", []string{}) {
-		plat := platforms.Get(name)	
+		plat := platform.Get(name)	
 		go plat.Listen(sv.GetAgent(plat.AgentName()))
 	}
 }

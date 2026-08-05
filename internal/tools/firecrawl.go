@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // WebExtractTool sends a scrape request to the Firecrawl API and returns the
@@ -81,12 +82,12 @@ func (t *WebExtractTool) Parameters() map[string]any {
 }
 
 func (t *WebExtractTool) apiKey() string {
-	apiKey := config.ReadEntry(GetToolConfig(), "firecrawl.api_key", "")
+	apiKey := config.ReadEntry(tool.GetToolConfig(), "firecrawl.api_key", "")
 	return apiKey
 }
 
 func (t *WebExtractTool) baseURL() string {
-	url := config.ReadEntry(GetToolConfig(), "firecrawl.url", "http://localhost:3002")
+	url := config.ReadEntry(tool.GetToolConfig(), "firecrawl.url", "http://localhost:3002")
 	return strings.TrimRight(url, "/")
 }
 
@@ -97,7 +98,7 @@ func (t *WebExtractTool) client() *http.Client {
 	return &http.Client{Timeout: 60 * time.Second}
 }
 
-func (t *WebExtractTool) Handler() ToolHandler {
+func (t *WebExtractTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args webExtractArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
@@ -206,5 +207,5 @@ func truncateStr(s string, n int) string {
 }
 
 func init() {
-	Register(&WebExtractTool{})
+	tool.Register(&WebExtractTool{})
 }

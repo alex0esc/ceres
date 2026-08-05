@@ -53,15 +53,15 @@ func main() {
 
 	//programm loop to make it possible to reload configs and switch to tui dynamically
 	for {
-		scanner.Scan()
+		if !scanner.Scan() {
+			sv.Shutdown()
+			return
+		}
 		if scanner.Err() != nil {
-			log.Fatalf("rror while scanning console input: %v", scanner.Err())
+			log.Fatalf("error while scanning console input: %v", scanner.Err())
 		}
 
 		switch scanner.Text() {
-		case "exit":
-			sv.Shutdown()
-			return
 		case "tui":
 			log.SetOutput(tuiWriter)
 			tui := bubbletea.RunTui(sv)

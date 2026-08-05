@@ -4,7 +4,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/charmbracelet/glamour"
@@ -73,13 +72,12 @@ func (tui *Tui) newRendererToolCall(width int) glamour.TermRenderer {
 
 
 func (tui *Tui) loadAgentHistory() {
-	agent := tui.getSelectedAgent()
-	if agent == nil {
+	if tui.selectedAgent == nil {
 		return
 	}
 	tui.messages = nil
 	tui.tokens = nil
-	histroy := agent.Client.GetHistory()
+	histroy := tui.selectedAgent.Client.GetHistory()
 	for entry := range histroy.All() {
 		switch entry.Type {
 		case history.EntryTypeAssistent:			
@@ -161,6 +159,3 @@ func (tui *Tui) appendToolCall(msg string) {
 	tui.messages = append(tui.messages, rendered)
 }
 
-func (tui *Tui) getSelectedAgent() *agent.Agent {
-	return tui.server.GetAgent(tui.selectedAgent)
-}

@@ -3,8 +3,9 @@ package bubbletea
 import (
 	"log"
 
- 	"github.com/alex0esc/ceres/internal/server"
+	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -38,7 +39,7 @@ type Tui struct {
 
 
 	server *server.Server
-	selectedAgent string
+	selectedAgent *agent.Agent
 
 	//current text
 	messages []string

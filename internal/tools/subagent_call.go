@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/alex0esc/ceres/pkg/handles"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // SubagentCall is a tool that lets an agent submit tasks to one or more
@@ -72,7 +73,7 @@ type pendingCall struct {
 	err       error // set immediately if the agent name could not be resolved
 }
 
-func (t *SubagentCall) Handler() ToolHandler {
+func (t *SubagentCall) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args subagentCallArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
@@ -126,5 +127,5 @@ func (t *SubagentCall) Handler() ToolHandler {
 }
 
 func init() {
-	Register(&SubagentCall{})
+	tool.Register(&SubagentCall{})
 }

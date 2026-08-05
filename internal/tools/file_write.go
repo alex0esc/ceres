@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileWriteTool writes content to a file inside the sandbox container,
@@ -46,7 +47,7 @@ func (FileWriteTool) Parameters() map[string]any {
 	}
 }
 
-func (FileWriteTool) Handler() ToolHandler {
+func (FileWriteTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Path    string `json:"path"`
@@ -59,8 +60,8 @@ func (FileWriteTool) Handler() ToolHandler {
 			return "", fmt.Errorf("file_write: path must not be empty")
 		}
 
-		containerName := config.ReadEntry(GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-		timeout, err := time.ParseDuration(config.ReadEntry(GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
 		if err != nil {
 			return "", fmt.Errorf("file_write: error while parsing sandbox.bash.timeout in toolconfig.toml")
 		}
@@ -173,5 +174,5 @@ func parseStatOutput(stdout string) (byteSize int, lineCount int, endsWithNewlin
 }
 
 func init() {
-	Register(FileWriteTool{})
+	tool.Register(FileWriteTool{})
 }

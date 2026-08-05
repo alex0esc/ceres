@@ -5,6 +5,7 @@ import (
 
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/docker/docker/client"
 )
 
@@ -32,14 +33,14 @@ func getSubagents() map[string]handles.AgentHandle {
 
 
 func InitDockerClient() error {
-	active := config.ReadEntry(GetToolConfig(), "sandbox.active", false)
+	active := config.ReadEntry(tool.GetToolConfig(), "sandbox.active", false)
 	if !active {
 		return nil
 	}
 
 	opts := []client.Opt{client.WithAPIVersionNegotiation()}
 
-	host := config.ReadEntry(GetToolConfig(), "sandbox.docker_host", "")
+	host := config.ReadEntry(tool.GetToolConfig(), "sandbox.docker_host", "")
 	if host != "" {
 		opts = append(opts, client.WithHost(host))
 	}

@@ -1,11 +1,11 @@
 package tools
 
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -57,7 +57,7 @@ type discordPostResult struct {
 	Created   bool   `json:"created"`
 }
 
-func (t *DiscordPost) Handler() ToolHandler {
+func (t *DiscordPost) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args discordPostArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
@@ -116,5 +116,5 @@ func (t *DiscordPost) getOrCreateChannel(name string) (channelID string, created
 }
 
 func init() {
-	Register(&DiscordPost{})
+	tool.Register(&DiscordPost{})
 }

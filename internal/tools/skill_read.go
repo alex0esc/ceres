@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-)
 
+	"github.com/alex0esc/ceres/pkg/tool"
+)
 
 // SkillReadTool reads the contents of a single file within the "skills/"
 // directory. The base path is fixed to "skills/"; the required "path"
@@ -42,7 +43,7 @@ func (SkillReadTool) Parameters() map[string]any {
 	}
 }
 
-func (SkillReadTool) Handler() ToolHandler {
+func (SkillReadTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Path string `json:"path"`
@@ -108,5 +109,5 @@ func (SkillReadTool) Handler() ToolHandler {
 }
 
 func init() {
-	Register(SkillReadTool{})
+	tool.Register(SkillReadTool{})
 }

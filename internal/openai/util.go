@@ -4,13 +4,12 @@ import (
 	"fmt"
 
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3/responses"
 )
 
-
 // RegisterTool adds a callable tool to the client.
-func (client *Client) RegisterTool(t tools.Tool) {
+func (client *Client) RegisterTool(t tool.Tool) {
 	client.Tools[t.Name()] = t
 }
 
@@ -40,6 +39,7 @@ func (client *Client) GetHistory() *history.History {
 
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
+	client.Interrupt()
 	client.chatHistory = nil
 	client.TotalTokens = 0
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileReadTool reads a file inside the sandbox container and returns its
@@ -39,7 +40,7 @@ func (FileReadTool) Parameters() map[string]any {
 	}
 }
 
-func (FileReadTool) Handler() ToolHandler {
+func (FileReadTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Path string `json:"path"`
@@ -51,9 +52,9 @@ func (FileReadTool) Handler() ToolHandler {
 			return "", fmt.Errorf("file_read: path must not be empty")
 		}
 
-		containerName := config.ReadEntry(GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
 
-		timeout, err := time.ParseDuration(config.ReadEntry(GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
 		if err != nil {
 			return "", fmt.Errorf("file_read: error while parsing sandbox.bash.timeout in toolconfig.toml")
 		}
@@ -119,5 +120,5 @@ func shellQuote(s string) string {
 }
 
 func init() {
-	Register(FileReadTool{})
+	tool.Register(FileReadTool{})
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/alex0esc/ceres/pkg/config"
-	"github.com/alex0esc/ceres/pkg/platforms"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/platform"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/robfig/cron/v3"
 )
 
@@ -28,8 +28,8 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error loading server config: %v", err)
 	}
-	tools.LoadToolConfig(ToolConfigPath)
-	platforms.LoadPlatformConfig(PlatformConfigPath)
+	tool.LoadToolConfig(ToolConfigPath)
+	platform.LoadPlatformConfig(PlatformConfigPath)
 
 	// load endpoints configurations
 	endpoints, err := openai.LoadEndpointsFromConfig(EndpointsConfigPath)

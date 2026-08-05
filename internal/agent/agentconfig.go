@@ -1,6 +1,5 @@
 package agent
 
-
 import (
 	"fmt"
 	"os"
@@ -9,7 +8,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/alex0esc/ceres/internal/openai"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3/responses"
 )
 
@@ -56,14 +55,14 @@ func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Ag
 		//ensure <name> works for all quantities
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
 		client.ReasoningEffort = responses.ReasoningEffort(cfg.ReasoningEffort)
-		client.Tools = make(map[string]tools.Tool)
+		client.Tools = make(map[string]tool.Tool)
 
 		// resolve each referenced tool name against the registry
 		for _, toolName := range cfg.Tools {
-			if !tools.Exists(toolName) {
+			if !tool.Exists(toolName) {
 				return nil, fmt.Errorf("agent %q references unknown tool %q", name, toolName)
 			}
-			client.RegisterTool(tools.Get(toolName))
+			client.RegisterTool(tool.Get(toolName))
 		}
 
 		agents = append(agents, NewAgent(name, cfg.Description, client, cfg.Subagent))
@@ -129,7 +128,7 @@ func EnsureOneAgentFile(dir string) error {
 		Description:     "The main agent of the system.",
 		ReasoningEffort: string(responses.ReasoningEffortMedium),
 		SystemPrompt:    "You are <name> a helpful AI assistant.",
-		Tools:           tools.Names(),
+		Tools:           tool.Names(),
 		Endpoint:        "ollama",
 		Quantity:        1,
 		Subagent:        false,

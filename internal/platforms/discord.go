@@ -7,12 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/tools"
+	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/platform"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/bwmarrin/discordgo"
 )
-
 
 // discordMaxMessageLength is the maximum number of characters allowed per
 // Discord message. Discord's hard limit is 2000 for normal messages (up to
@@ -27,14 +29,14 @@ type Discord struct {
 // NewSession creates the discord session and registers the discord_post tool
 // with it. It is a no-op if the session has already been created.
 func (d *Discord) NewSession() error {
-	token := config.ReadEntry(GetPlatformConfig(), "discord.bot_token", "<token>")
+	token := config.ReadEntry(platform.GetPlatformConfig(), "discord.bot_token", "<token>")
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return fmt.Errorf("discord: failed to create session: %w", err)
 	}
-	guildID := config.ReadEntry(GetPlatformConfig(), "discord.guild_id", "<guild_id>")
+	guildID := config.ReadEntry(platform.GetPlatformConfig(), "discord.guild_id", "<guild_id>")
 	//make sure discord post has the right parameters
-	tools.Get("discord_post").(*tools.DiscordPost).SetSessionGuildID(session, guildID)
+	tool.Get("discord_post").(*tools.DiscordPost).SetSessionGuildID(session, guildID)
 	d.session = session
 	return nil
 }
@@ -46,7 +48,7 @@ func (d *Discord) Name() string {
 
 
 func (d *Discord) AgentName() string {
-	return config.ReadEntry(GetPlatformConfig(), "discord.agent_name", "Ceres")
+	return config.ReadEntry(platform.GetPlatformConfig(), "discord.agent_name", "Ceres")
 }
 
 
@@ -85,7 +87,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		return
 	}
 	// only allow the configured user to talk to the bot
-	allowedUserID := config.ReadEntry(GetPlatformConfig(), "discord.user_id", "<id>")
+	allowedUserID := config.ReadEntry(platform.GetPlatformConfig(), "discord.user_id", "<id>")
 	if allowedUserID == "" || m.Author.ID != allowedUserID {
 		return
 	}
@@ -105,6 +107,11 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 			}
 		}
 	}()
+	if cmd, msg := command.CheckCommand(agent, m.Content); cmd {
+		close(stopTyping)
+		sendChunked(s, m.ChannelID, msg)
+		return
+	}
 	resultCh := agent.SubmitTask(context.Background(), m.Content, false, 60*time.Minute)
 	result := <-resultCh
 	close(stopTyping)
@@ -187,5 +194,5 @@ func lastIndexInRange(s, sep string, limit int) int {
 
 
 func init() {
-	Register(&Discord{})
+	platform.Register(&Discord{})
 }

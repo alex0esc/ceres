@@ -1,19 +1,19 @@
-package bubbletea
-
+package agent
 
 import (
 	"fmt"
 	"strings"
 )
 
+
 // checkCommand checks whether the given text is a valid command
 // name and arguments, and handleCommand is called. Returns true if
 // the text was handled as a command, false otherwise.
-func (tui *Tui) checkCommand(cmdText string) bool {
+func (agent *Agent) CheckCommand(cmdText string) (bool, string) {
 	cmdText = strings.TrimSpace(cmdText)
 
 	if !strings.HasPrefix(cmdText, "/") {
-		return false
+		return false, ""
 	}
 
 	// remove the leading "/" and split into fields by whitespace
@@ -22,61 +22,63 @@ func (tui *Tui) checkCommand(cmdText string) bool {
 
 	if len(fields) == 0 {
 		// only "/" was entered without a command name
-		return false
+		return false, ""
 	}
 
 	name := strings.ToLower(fields[0])
 	args := fields[1:]
 
-	tui.handleCommand(name, args)
-
-	return true
+	return true, agent.handleCommand(name, args)
 }
 
 // handleCommand handles the parsed command based on its name.
 // args contains all arguments following the command name.
-func (tui *Tui) handleCommand(name string, args []string) {
+func (agent *Agent) handleCommand(name string, args []string) string {
 	switch name {
 	case "help":
-		tui.handleHelp(args)
+		return agent.handleHelp(args)
 
 	case "clear":
-		tui.handleClear(args)
+		return agent.handleClear(args)
 
 	case "interrupt":
-		tui.handleInterrupt(args)
+		return agent.handleInterrupt(args)
 
 	default:
-		fmt.Printf("Unknown command: /%s\n", name)
+		return fmt.Sprintf("Unknown command: /%s\n", name)
 	}
 }
 
-func (tui *Tui) handleHelp(args []string) {
+
+const NoArgs = "This command does not take arguments!"
+
+func (agent *Agent) handleHelp(args []string) string {
 	if len(args) > 0 {
-		tui.appendAgentMessage("Invalid arguments for **help** command!")
+		return NoArgs
 	}
 
-	tui.appendAgentMessage(`## Available Commands
+	return `## Available Commands
 	 
 - **/help** — Show this help message
 - **/clear** — Clear the chat history of the selected agent
 - **/interrupt** — Interrupt the currently running agent
 	 
-Type a command starting with "/" and press **Enter** to run it.`)
+Type a command starting with "/" and press **Enter** to run it.`
 
 }
 
-func (tui *Tui) handleClear(args []string) {
+func (agent *Agent) handleClear(args []string) string {
 	if len(args) > 0 {
-		tui.appendAgentMessage("Invalid arguments for **clear** command!")
+		return NoArgs
 	}
-	tui.getSelectedAgent().Client.ClearHistory()
-	tui.messages = nil
+	agent.Client.ClearHistory()
+	return "Agent history has been reset."
 }
 
-func (tui *Tui) handleInterrupt(args []string) {
+func (agent *Agent) handleInterrupt(args []string) string {
 	if len(args) > 0 {
-		tui.appendAgentMessage("Invalid arguments for **interrupt** command!")
+		return NoArgs
 	}
-	tui.getSelectedAgent().Client.Interrupt();
+	agent.Client.Interrupt()
+	return "Agent has been interrupted."
 }

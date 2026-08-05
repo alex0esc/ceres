@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // SearxngTool queries a SearXNG instance and returns the results to the agent.
@@ -66,7 +67,7 @@ func (t *SearxngTool) Parameters() map[string]any {
 }
 
 func (t *SearxngTool) baseURL() string {
-	url := config.ReadEntry(GetToolConfig(), "searxng.url", "http://localhost:8080")
+	url := config.ReadEntry(tool.GetToolConfig(), "searxng.url", "http://localhost:8080")
 	return url
 }
 
@@ -77,7 +78,7 @@ func (t *SearxngTool) client() *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
 }
 
-func (t *SearxngTool) Handler() ToolHandler {
+func (t *SearxngTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args searxngArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
@@ -162,5 +163,5 @@ func truncate(s string, n int) string {
 }
 
 func init() {
-	Register(&SearxngTool{})
+	tool.Register(&SearxngTool{})
 }

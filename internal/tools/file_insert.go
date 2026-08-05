@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 type FileInsertTool struct{}
@@ -33,7 +34,7 @@ func (FileInsertTool) Parameters() map[string]any {
 	}
 }
 
-func (FileInsertTool) Handler() ToolHandler {
+func (FileInsertTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Path    string `json:"path"`
@@ -67,7 +68,7 @@ func (FileInsertTool) Handler() ToolHandler {
 		}
 
 		// Load config once
-		cfg := GetToolConfig()
+		cfg := tool.GetToolConfig()
 		containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 		timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
 		if err != nil {
@@ -132,5 +133,5 @@ func (FileInsertTool) Handler() ToolHandler {
 }
 
 func init() {
-	Register(FileInsertTool{})
+	tool.Register(FileInsertTool{})
 }

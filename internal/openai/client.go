@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/alex0esc/ceres/pkg/config"
-	"github.com/alex0esc/ceres/pkg/tools"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 )
@@ -20,7 +20,7 @@ type Client struct {
 	ReasoningEffort openai.ReasoningEffort
 	SystemPrompt    string
 	chatHistory     []responses.ResponseInputItemUnionParam
-	Tools           map[string]tools.Tool
+	Tools           map[string]tool.Tool
 
 	// prevents endless tool-call loops if the model gets "stuck"
 	MaxToolIterations int
@@ -42,7 +42,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		modelName:         modelName,
 		ReasoningEffort:   responses.ReasoningEffortNone,
 		SystemPrompt:      "Your are Ceres a helpful AI assistent!",
-		MaxToolIterations: config.ReadEntry(tools.GetToolConfig(), "max_tool_iterations", 30),
+		MaxToolIterations: config.ReadEntry(tool.GetToolConfig(), "max_tool_iterations", 30),
 		endpoint: endpoint,
 	}
 }

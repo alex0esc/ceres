@@ -1,5 +1,5 @@
-
 package bubbletea
+
 
 import (
 	"github.com/alex0esc/ceres/internal/server"
@@ -85,13 +85,14 @@ func newTextInput() textinput.Model {
 }
 
 func initialTui(server *server.Server) *Tui {
+	
 	return &Tui{
 		textinput: newTextInput(),
 		list:      newList(server.GetAgentList()),
 		focus:     focusInput,
 		server:    server,
 		inputChan: make(chan TokenMsg, 10),
-		selectedAgent: server.GetAgentList()[0].Name(),
+		selectedAgent: nil,
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -83,11 +84,12 @@ func (tui *Tui) submitMessage() {
 	if input == "" {
 		return
 	}
-	agnt := tui.getSelectedAgent()
+	agnt := tui.selectedAgent
 	if agnt != nil {
-		if !tui.checkCommand(input) {
+		cmd, msg := command.CheckCommand(tui.selectedAgent, input)
+		if !cmd {
 			tui.mergeTokens()
-			tui.getSelectedAgent().Client.Interrupt()
+			tui.selectedAgent.Client.Interrupt()
 			tui.appendUserMessage(input)
 			res := agnt.SubmitTask(context.Background(), input, false, 60 * time.Minute)
 			go func() {
@@ -96,6 +98,9 @@ func (tui *Tui) submitMessage() {
 					log.Printf("error while submitting message in the cli: %v", err)
 				}
 			}()
+		} else {
+			tui.mergeTokens()
+			tui.appendAgentMessage(msg)
 		}
 	} else {
 		tui.appendAgentMessage("No Agent selected!")
@@ -109,17 +114,17 @@ func (tui *Tui) submitMessage() {
 // feeds the current list element into the text field
 func (tui *Tui) applyListSelection() {
 	if selected, ok := tui.list.SelectedItem().(listItem); ok {
-		if(tui.selectedAgent == selected.botName) {
+		if(tui.selectedAgent != nil && tui.selectedAgent.Name() == selected.botName) {
 			return
 		}
-		old := tui.getSelectedAgent()
+		old := tui.selectedAgent
 		if old != nil {
 			old.Client.ClearOnEvent()
 		} 
-		tui.selectedAgent = selected.botName
+		tui.selectedAgent = tui.server.GetAgent(selected.botName)
 		tui.loadAgentHistory()
 		tui.viewport.SetContent(tui.getContentString())
-		tui.getSelectedAgent().Client.SetOnEvent(func(token openai.Token) {
+		tui.selectedAgent.Client.SetOnEvent(func(token openai.Token) {
 			tui.inputChan <- TokenMsg(token)
 		})
 	}
@@ -131,6 +136,7 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	rightWidth := max(msg.Width-listWidth-2, 10)
 	viewportHeight := msg.Height - footerHeight
 	if !tui.ready {
+		tui.applyListSelection()
 		tui.viewport = viewport.New(rightWidth, viewportHeight)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
@@ -138,7 +144,6 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	} else {
 		tui.viewport.Width = rightWidth
 		tui.viewport.Height = viewportHeight
-		tui.applyListSelection()
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)

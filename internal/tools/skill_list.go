@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // SkillListTool lists all file names within the "skills/" directory
@@ -44,7 +46,7 @@ func (SkillListTool) Parameters() map[string]any {
 	}
 }
 
-func (SkillListTool) Handler() ToolHandler {
+func (SkillListTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Subpath   string `json:"subpath"`
@@ -150,5 +152,5 @@ func (SkillListTool) Handler() ToolHandler {
 }
 
 func init() {
-	Register(SkillListTool{})
+	tool.Register(SkillListTool{})
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // GetTimeTool returns the current time, optionally for a given IANA
@@ -35,7 +37,7 @@ func (GetTimeTool) Parameters() map[string]any {
 	}
 }
 
-func (GetTimeTool) Handler() ToolHandler {
+func (GetTimeTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
 			Timezone string `json:"timezone"`
@@ -84,6 +86,6 @@ func (GetTimeTool) Handler() ToolHandler {
 
 
 func init() {
-	Register(GetTimeTool{})
+	tool.Register(GetTimeTool{})
 }
 

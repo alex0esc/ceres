@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // SubagentList is a tool that lists all available subagents
@@ -29,7 +31,7 @@ func (t *SubagentList) Parameters() map[string]any {
 	}
 }
 
-func (t *SubagentList) Handler() ToolHandler {
+func (t *SubagentList) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		if len(getSubagents()) == 0 {
 			return "No subagents available.", nil
@@ -47,5 +49,5 @@ func (t *SubagentList) Handler() ToolHandler {
 
 
 func init() {
-	Register(&SubagentList{})
+	tool.Register(&SubagentList{})
 }
