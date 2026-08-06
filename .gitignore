@@ -1,8 +1,8 @@
-build/
-config/
-agents/
-skills/
-logs/
-data_agent/
-data_sandbox/
+/build/
+/config/
+/agents/
+/skills/
+/logs/
+/data_agent/
+/data_sandbox/
 
