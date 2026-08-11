@@ -135,11 +135,24 @@ func (tui *Tui) applyListSelection() {
 func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	rightWidth := max(msg.Width-listWidth-2, 10)
 	viewportHeight := msg.Height - footerHeight
+
+	tui.rendererUser = tui.newRendererUser(rightWidth)
+	tui.rendererAgent = tui.newRendererAgent(rightWidth)
+	tui.rendererToolCall = tui.newRendererToolCall(rightWidth)	
+
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(rightWidth, viewportHeight)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
+
+		tui.viewport.KeyMap.HalfPageDown.SetEnabled(false) // d
+		tui.viewport.KeyMap.HalfPageUp.SetEnabled(false)   // u
+		tui.viewport.KeyMap.PageDown.SetEnabled(false)     // f / pgdown / space
+		tui.viewport.KeyMap.PageUp.SetEnabled(false)       // b / pgup
+		tui.viewport.KeyMap.Down.SetEnabled(false)
+		tui.viewport.KeyMap.Up.SetEnabled(false)
+
 		tui.ready = true
 	} else {
 		tui.viewport.Width = rightWidth
@@ -148,9 +161,6 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
 	tui.textinput.Width = rightWidth - 4
-	tui.rendererUser = tui.newRendererUser(tui.viewport.Width)
-	tui.rendererAgent = tui.newRendererAgent(tui.viewport.Width)
-	tui.rendererToolCall = tui.newRendererToolCall(tui.viewport.Width)
 	tui.viewport.SetContent(tui.getContentString())
 }
 
