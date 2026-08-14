@@ -2,11 +2,13 @@ package bubbletea
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/alex0esc/ceres/pkg/command"
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -15,14 +17,25 @@ import (
 func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Enter/Shift+Enter im Input-Fokus werden komplett selbst behandelt
+	// (submit bzw. manuelles Einfügen von \n), damit die Textarea nicht
+	// zusätzlich noch einen eigenen Zeilenumbruch einfügt.
+	if km, ok := msg.(tea.KeyMsg); ok && tui.focus == focusInput {
+		switch km.String() {
+		case "enter", "alt+enter":
+			cmd := tui.handleKeyMsg(km)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return tui, tea.Batch(cmds...)
+		}
+	}
+
 	cmd := tui.updateFocusedComponent(msg)
 	cmds = append(cmds, cmd)
-
 	tui.viewport, cmd = tui.viewport.Update(msg)
 	cmds = append(cmds, cmd)
-
 	switch msg := msg.(type) {
-
 	case tea.KeyMsg:
 		cmd := tui.handleKeyMsg(msg)
 		if cmd != nil {
@@ -45,53 +58,63 @@ func waitForToken(sub chan TokenMsg) tea.Cmd {
 
 // to handle global key presses
 func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
-	case tea.KeyCtrlC:
+	switch msg.String() {
+	case "ctrl+c":
 		return tea.Quit
-	case tea.KeyTab:
+	case "tab":
 		tui.toggleFocus()
-	case tea.KeyEnter:
+	case "alt+enter":
+		if tui.focus == focusInput {
+			tui.textarea.InsertString("\n")
+		}
+	case "enter":
 		tui.handleEnter()
 	}
 	tui.applyListSelection()
 	return nil
 }
 
-
 // changes the focues between the two fields
 func (tui *Tui) toggleFocus() {
 	if tui.focus == focusInput {
 		tui.focus = focusList
-		tui.textinput.Blur()
+		tui.textarea.Blur()
 	} else {
 		tui.focus = focusInput
-		tui.textinput.Focus()
+		tui.textarea.Focus()
 	}
 }
-
 
 // handles the enter key press
 func (tui *Tui) handleEnter() {
-	if tui.focus == focusInput {
+	switch tui.focus {
+	case focusInput:
 		tui.submitMessage()
+	case focusList:
+		tui.loadAgentHistory()
+		tui.viewport.SetContent(tui.getContentString())
 	}
 }
 
-
 // submits a message to channel and to the text field
 func (tui *Tui) submitMessage() {
-	input := tui.textinput.Value()
+	input := tui.textarea.Value()
 	if input == "" {
 		return
 	}
+
 	agnt := tui.selectedAgent
 	if agnt != nil {
-		cmd, msg := command.CheckCommand(tui.selectedAgent, input)
+		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
+		tui.mergeTokens()
 		if !cmd {
-			tui.mergeTokens()
 			tui.selectedAgent.Client.Interrupt()
 			tui.appendUserMessage(input)
-			res := agnt.SubmitTask(context.Background(), input, false, 60 * time.Minute)
+			timeout, err := time.ParseDuration(config.ReadEntry(tui.server.GetConfig(), "tui_msg_timeout", "60m"))
+			if err != nil {
+				panic(fmt.Sprintf("error while parsing tui_timeout in server config: %v", err))
+			}
+			res := agnt.SubmitTask(context.Background(), input, false, timeout)
 			go func() {
 				err := (<-res).Err
 				if err != nil {
@@ -99,28 +122,26 @@ func (tui *Tui) submitMessage() {
 				}
 			}()
 		} else {
-			tui.mergeTokens()
-			tui.appendAgentMessage(msg)
+			tui.appendAgentMessage(cmd_text)
 		}
 	} else {
-		tui.appendAgentMessage("No Agent selected!")
+		tui.appendAgentMessage("*No Agent selected!*")
 	}
 	tui.viewport.SetContent(tui.getContentString())
-	tui.textinput.Reset()
+	tui.textarea.Reset()
 	tui.viewport.GotoBottom()
 }
-
 
 // feeds the current list element into the text field
 func (tui *Tui) applyListSelection() {
 	if selected, ok := tui.list.SelectedItem().(listItem); ok {
-		if(tui.selectedAgent != nil && tui.selectedAgent.Name() == selected.botName) {
+		if tui.selectedAgent != nil && tui.selectedAgent.Name() == selected.botName {
 			return
 		}
 		old := tui.selectedAgent
 		if old != nil {
 			old.Client.ClearOnEvent()
-		} 
+		}
 		tui.selectedAgent = tui.server.GetAgent(selected.botName)
 		tui.loadAgentHistory()
 		tui.viewport.SetContent(tui.getContentString())
@@ -130,29 +151,23 @@ func (tui *Tui) applyListSelection() {
 	}
 }
 
-
 // changes the size of the components accordingly
 func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	rightWidth := max(msg.Width-listWidth-2, 10)
 	viewportHeight := msg.Height - footerHeight
-
 	tui.rendererUser = tui.newRendererUser(rightWidth)
 	tui.rendererAgent = tui.newRendererAgent(rightWidth)
-	tui.rendererToolCall = tui.newRendererToolCall(rightWidth)	
-
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(rightWidth, viewportHeight)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
-
 		tui.viewport.KeyMap.HalfPageDown.SetEnabled(false) // d
 		tui.viewport.KeyMap.HalfPageUp.SetEnabled(false)   // u
 		tui.viewport.KeyMap.PageDown.SetEnabled(false)     // f / pgdown / space
 		tui.viewport.KeyMap.PageUp.SetEnabled(false)       // b / pgup
 		tui.viewport.KeyMap.Down.SetEnabled(false)
 		tui.viewport.KeyMap.Up.SetEnabled(false)
-
 		tui.ready = true
 	} else {
 		tui.viewport.Width = rightWidth
@@ -160,23 +175,21 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
-	tui.textinput.Width = rightWidth - 4
+	tui.textarea.SetWidth(rightWidth - 4)
 	tui.viewport.SetContent(tui.getContentString())
 }
 
-
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token TokenMsg) {
-	if token.Type == openai.TokenEndOfSequence {
+	switch token.Type {
+	case openai.TokenEndOfSequence:
 		tui.mergeTokens()
-		tui.tokens = nil
-	} else {
+	default:
 		tui.tokens = append(tui.tokens, token)
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.viewport.GotoBottom()
 }
-
 
 // updates the focused components based on their librarie
 func (tui *Tui) updateFocusedComponent(msg tea.Msg) tea.Cmd {
@@ -185,7 +198,7 @@ func (tui *Tui) updateFocusedComponent(msg tea.Msg) tea.Cmd {
 	case focusList:
 		tui.list, cmd = tui.list.Update(msg)
 	case focusInput:
-		tui.textinput, cmd = tui.textinput.Update(msg)
+		tui.textarea, cmd = tui.textarea.Update(msg)
 	}
 	return cmd
 }

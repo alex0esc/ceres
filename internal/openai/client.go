@@ -2,12 +2,12 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -34,6 +34,11 @@ type Client struct {
 
     //usage
     TotalTokens int64
+
+    //compression
+    CompressionThreshold int64
+	NumMessagesToKeep int
+    CompressionPromt string
 }
 
 
@@ -41,9 +46,12 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 	return &Client{
 		modelName:         modelName,
 		ReasoningEffort:   responses.ReasoningEffortNone,
-		SystemPrompt:      "Your are Ceres a helpful AI assistent!",
-		MaxToolIterations: config.ReadEntry(tool.GetToolConfig(), "max_tool_iterations", 30),
+		SystemPrompt:      "Your are Ceres a helpful AI assistent.",
+		MaxToolIterations: 30,
 		endpoint: endpoint,
+		CompressionThreshold: 200000,
+		CompressionPromt: "Summerize your current chat history. Make it precise and short.",
+		NumMessagesToKeep: 8,
 	}
 }
 
@@ -78,7 +86,11 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 
 		//put reasoning in the chat history for the bot to have more context
 		case responses.ResponseReasoningItem:
-    		client.appendReasoningSummary(v)
+    		var converted responses.ResponseInputItemUnion
+    		if err := json.Unmarshal([]byte(v.RawJSON()), &converted); err != nil {
+    		    return false, fmt.Errorf("failed to convert reasoning item: %w", err)
+    		}
+    		client.chatHistory = append(client.chatHistory, converted.ToParam())
 
 			
 		case responses.ResponseOutputMessage:
@@ -124,6 +136,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
+// HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
 func (client *Client) AskStream(ctx context.Context, userPrompt string) (string, error) {
 	client.appendUserMessage(userPrompt)
 
@@ -147,6 +160,10 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 	// for the same item if the SDK emits multiple related events for it
 	var fullAnswer strings.Builder
 	for i := 0; i < client.MaxToolIterations; i++ {
+		if client.TotalTokens > client.CompressionThreshold {
+			client.CompressHistory(runCtx)
+		} 
+
 		stream := client.endpoint.client.Responses.NewStreaming(runCtx, responses.ResponseNewParams{
 			Model:        client.modelName,
 			Instructions: openai.String(client.SystemPrompt),
@@ -187,7 +204,7 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 				call_text := fmt.Sprintf("Calling tool [%s] with arguments %s...", lastFcName, e.Arguments)
 
 				tempAnswer.WriteString(call_text)
-				client.triggerOnEvent(NewToken(TokenTypeToolCall, call_text))
+				client.triggerOnEvent(NewToken(TokenTypeSystemInfo, call_text))
 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls

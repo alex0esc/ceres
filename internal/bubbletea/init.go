@@ -1,10 +1,10 @@
 package bubbletea
 
-
 import (
-	"github.com/alex0esc/ceres/internal/server"
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -22,7 +22,7 @@ func (item listItem) Description() string { return item.botDesc }
 
 const (
 	listWidth    = 40
-	footerHeight = 4 // Inputbox: border top + bottom (1 + 3)
+	footerHeight = 7 // Inputbox: border top + bottom (4 + 3)
 )
 
 func newListDelegate() list.ItemDelegate {
@@ -33,11 +33,11 @@ func newListDelegate() list.ItemDelegate {
 
 	// Selektiertes Item: Orange, mit linkem Balken
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(ThemeColorUser).
-		BorderForeground(ThemeColorUser)
+		Foreground(ThemeColorSelected).
+		BorderForeground(ThemeColorSelected)
 	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(ThemeColorUser).
-		BorderForeground(ThemeColorUser)
+		Foreground(ThemeColorSelected).
+		BorderForeground(ThemeColorSelected)
 
 	// Normale Items: gedämpftes Grau, damit Orange hervorsticht
 	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.
@@ -68,26 +68,29 @@ func newList(agents []*agent.Agent) list.Model {
 	
 l.Styles.Title = l.Styles.Title.
 	Background(lipgloss.Color("")). // Hintergrund entfernen
-	Foreground(ThemeColorUser).
+	Foreground(ThemeColorBorder).
 	Bold(true).
 	Padding(0, 11)
 
 	return l
 }
 
-func newTextInput() textinput.Model {
-	ti := textinput.New()
-	ti.Placeholder = "Send message..."
-	ti.Focus()
-	ti.CharLimit = 280
-	ti.Width = 50
-	return ti
+func newTextArea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Send message..."
+	ta.Focus()
+	ta.CharLimit = 30000
+	ta.SetWidth(50)
+	ta.SetHeight(4)
+	ta.ShowLineNumbers = false
+	ta.Prompt = ""
+	return ta
 }
 
 func initialTui(server *server.Server) *Tui {
 	
 	return &Tui{
-		textinput: newTextInput(),
+		textarea: newTextArea(),
 		list:      newList(server.GetAgentList()),
 		focus:     focusInput,
 		server:    server,

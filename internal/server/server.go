@@ -68,3 +68,10 @@ func (server *Server) GetAgentList() []*agent.Agent {
     return list
 }
 
+
+func (server *Server) GetConfig() *config.Config {
+	if server.config == nil {	
+		panic("server config is nil, initialize it first")
+	}
+	return server.config
+}

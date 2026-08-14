@@ -21,8 +21,12 @@ type AgentConfig struct {
 	ReasoningEffort string   `toml:"reasoning_effort"`
 	Quantity        int      `toml:"quantity"`
 	Subagent        bool     `toml:"subagent"`
+	MaxToolIterations int     `toml:"max_tool_iterations"`
 	Tools           []string `toml:"tools"`
 	SystemPrompt    string   `toml:"system_prompt"`
+    CompressionThreshold int64 `toml:"compression_threshold"`
+	NumMessagesToKeep int      `toml:"num_messages_to_keep"`
+    CompressionPromt string    `toml:"compressions_promt"`
 }
 
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
@@ -56,6 +60,10 @@ func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Ag
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
 		client.ReasoningEffort = responses.ReasoningEffort(cfg.ReasoningEffort)
 		client.Tools = make(map[string]tool.Tool)
+		client.MaxToolIterations = cfg.MaxToolIterations
+		client.NumMessagesToKeep = cfg.NumMessagesToKeep
+		client.CompressionThreshold = cfg.CompressionThreshold
+		client.CompressionPromt = cfg.CompressionPromt
 
 		// resolve each referenced tool name against the registry
 		for _, toolName := range cfg.Tools {
@@ -124,7 +132,7 @@ func EnsureOneAgentFile(dir string) error {
 	
 	cfg := AgentConfig{
 		Name:            "Ceres",
-		ModelName:       "ornith:33b",
+		ModelName:       "ornith:35b",
 		Description:     "The main agent of the system.",
 		ReasoningEffort: string(responses.ReasoningEffortMedium),
 		SystemPrompt:    "You are <name> a helpful AI assistant.",
@@ -132,6 +140,10 @@ func EnsureOneAgentFile(dir string) error {
 		Endpoint:        "ollama",
 		Quantity:        1,
 		Subagent:        false,
+		MaxToolIterations: 30,
+		NumMessagesToKeep: 8,
+		CompressionThreshold: 200000,
+		CompressionPromt: "Your task is to summerize the current chat. Make it precise and short.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)

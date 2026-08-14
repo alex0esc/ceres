@@ -26,11 +26,13 @@ func (client *Client) GetHistory() *history.History {
 				hist.Add(history.NewEntry(history.EntryTypeAssistent, msg.Content.OfString.String()))
 			case responses.EasyInputMessageRoleUser:
 				hist.Add(history.NewEntry(history.EntryTypeUser, msg.Content.OfString.String()))
+			case responses.EasyInputMessageRoleSystem:
+				hist.Add(history.NewEntry(history.EntryTypeSystemInfo, msg.Content.OfString.String()))
 			}
 
 		case item.OfFunctionCall != nil:
 			fc := item.OfFunctionCall
-			hist.Add(history.NewEntry(history.EntryTypeToolCall, fmt.Sprintf("Calling tool [%s] with arguments %s...\n\n", fc.Name, fc.Arguments)))
+			hist.Add(history.NewEntry(history.EntryTypeSystemInfo, fmt.Sprintf("Calling tool [%s] with arguments %s...\n\n", fc.Name, fc.Arguments)))
 		}
 	}
 	return &hist
@@ -51,7 +53,7 @@ type TokenType int
 const (
 	TokenTypeUser = iota
 	TokenTypeAssistent
-	TokenTypeToolCall
+	TokenTypeSystemInfo
 	TokenEndOfSequence
 )
 
@@ -106,6 +108,7 @@ func (client *Client) appendAssistentMessage(promt string) {
 }
 
 
+/*
 func (client *Client) appendReasoningSummary(item responses.ResponseReasoningItem) {
 	summaryParams := make([]responses.ResponseReasoningItemSummaryParam, 0, len(item.Summary))
     for _, s := range item.Summary {
@@ -114,8 +117,7 @@ func (client *Client) appendReasoningSummary(item responses.ResponseReasoningIte
         })
     }
     msg := responses.ResponseInputItemParamOfReasoning(item.ID, summaryParams)
-    if msg.OfMessage != nil {
-    	msg.OfMessage.Type = "reasoning"
-    }
+    msg.OfReasoning.Type = "reasoning"
     client.chatHistory = append(client.chatHistory, msg)
 }
+*/

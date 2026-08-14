@@ -7,7 +7,7 @@ import (
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -28,15 +28,13 @@ const (
 // tui hold necessary components for the ui
 type Tui struct {
 	viewport   viewport.Model
-	textinput  textinput.Model
+	textarea   textarea.Model
 	list       list.Model
 	ready      bool
 	focus      focusState
 
 	rendererUser   glamour.TermRenderer
-	rendererAgent   glamour.TermRenderer
-	rendererToolCall  glamour.TermRenderer
-
+	rendererAgent  glamour.TermRenderer
 
 	server *server.Server
 	selectedAgent *agent.Agent

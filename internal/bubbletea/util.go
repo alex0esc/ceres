@@ -8,6 +8,8 @@ import (
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 
@@ -23,51 +25,44 @@ func (tui *Tui) newRendererAgent(width int) glamour.TermRenderer {
 }
 
 
+
 func (tui *Tui) newRendererUser(width int) glamour.TermRenderer {
-	style := styles.DraculaStyleConfig
+    style := styles.DraculaStyleConfig
+    italic := true
+    margin := uint(5)
 
-	bold := true
-    color := string(ThemeColorUser)
-	
+    // Basis-Dokument
+    style.Document.Margin = &margin
 
-	/*
-	prefixStyle := lipgloss.NewStyle().
-		Foreground(ThemeColorUser).
-		Bold(true)
-		*/
+    // Text & Absätze
+    style.Text.Italic = &italic
 
-	style.Document.Prefix = "❯❯ "
-	style.Document.Color = &color
-	style.Text.Color = &color
-	style.Text.Bold = &bold
-	style.Text.Italic = &bold
+    // Zitate & Listen
+    style.List.LevelIndent = uint(2)
 
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStyles(style),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		log.Fatal("TermRenderer failed to be initialized!")
-	}
-	return *renderer
+    renderer, err := glamour.NewTermRenderer(
+        glamour.WithStyles(style),
+        glamour.WithWordWrap(width),
+        glamour.WithPreservedNewLines(),
+    )
+    if err != nil {
+        log.Fatalf("TermRenderer failed to be initialized: %v", err)
+    }
+    return *renderer
 }
 
 
-func (tui *Tui) newRendererToolCall(width int) glamour.TermRenderer {
-	style := styles.DraculaStyleConfig
-
-	color := string(ThemeColorBorder)
-	
-	style.Text.Color = &color
-
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStyles(style),
-		glamour.WithWordWrap(width),
-	)
+func (tui *Tui) renderSystem(text string) string {
+	rendered, err := tui.rendererAgent.Render(text)
 	if err != nil {
-		log.Fatal("TermRenderer failed to be initialized!")
+		rendered = text
 	}
-	return *renderer
+	cleanText := ansi.Strip(rendered)
+	systemStyle := lipgloss.NewStyle().
+		Foreground(ThemeColorSystem).
+		Italic(true).
+		Bold(true)
+	return systemStyle.Render(cleanText)
 }
 
 
@@ -84,8 +79,8 @@ func (tui *Tui) loadAgentHistory() {
 			tui.appendAgentMessage(entry.Content)
 		case history.EntryTypeUser:
 			tui.appendUserMessage(entry.Content)
-		case history.EntryTypeToolCall:
-			tui.appendToolCall(entry.Content)
+		case history.EntryTypeSystemInfo:
+			tui.appendSystemMessage(entry.Content)
 		}
 		
 	}
@@ -106,8 +101,14 @@ func (tui *Tui) getContentString() string {
 		for _, token := range tui.tokens {
 			tokenText.WriteString(token.Content)
 		}
-
-		rendered, err := tui.rendererAgent.Render(tokenText.String())
+			
+		var rendered string
+		var err error = nil
+		if len(tui.tokens) > 0 && tui.tokens[0].Type == openai.TokenTypeSystemInfo {
+			rendered = tui.renderSystem(tokenText.String())
+		} else {
+			rendered, err = tui.rendererAgent.Render(tokenText.String())
+		}
 		if err != nil {
 			rendered = tokenText.String()
 		}	
@@ -125,20 +126,31 @@ func (tui *Tui) mergeTokens() {
 	for _, token := range tui.tokens {
 		text.WriteString(token.Content)
 	}
-	if tui.tokens[0].Type == openai.TokenTypeToolCall {
-		tui.appendToolCall(text.String())
-	} else {
+	switch tui.tokens[0].Type {
+	case openai.TokenTypeAssistent, openai.TokenEndOfSequence: 
 		tui.appendAgentMessage(text.String())
+	case openai.TokenTypeUser: 
+		tui.appendUserMessage(text.String())
+	case openai.TokenTypeSystemInfo:
+		tui.appendSystemMessage(text.String())
 	}
 	tui.tokens = nil
 }
 
-func (tui *Tui) appendUserMessage(msg string) {	
-	rendered, err := tui.rendererUser.Render(msg)
-	if err != nil {
-		rendered = msg
-	}
-	tui.messages = append(tui.messages, rendered)
+
+func (tui *Tui) appendUserMessage(msg string) {   
+    rendered, err := tui.rendererUser.Render(msg)
+    if err != nil {
+        rendered = msg
+    }
+
+    cleanText := ansi.Strip(rendered)
+
+    userStyle := lipgloss.NewStyle().
+        Foreground(ThemeColorUser).
+        Italic(true)
+
+    tui.messages = append(tui.messages, userStyle.Render(cleanText))
 }
 
 
@@ -151,11 +163,6 @@ func (tui *Tui) appendAgentMessage(msg string) {
 }
 
 
-func (tui *Tui) appendToolCall(msg string) {
-	rendered, err := tui.rendererToolCall.Render(msg)
-	if err != nil {
-		rendered = msg
-	}
-	tui.messages = append(tui.messages, rendered)
+func (tui *Tui) appendSystemMessage(msg string) {
+	tui.messages = append(tui.messages, tui.renderSystem(msg))
 }
-

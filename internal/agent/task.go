@@ -16,6 +16,7 @@ type task struct {
 	prompt       string
 	clearHistory bool
 	resultCh     chan handles.TaskResult
+	compress     bool
 }
 
 
@@ -44,6 +45,13 @@ func (agent *Agent) worker() {
 				runCtx, cancel = context.WithTimeout(t.parentCtx, t.timeout)
 			} else {
 				runCtx, cancel = context.WithCancel(t.parentCtx)
+			}
+
+			if t.compress {
+				err := agent.Client.CompressHistory(runCtx)
+				t.resultCh <- handles.TaskResult{Response: "History compressed successfuly.", Err: err}
+				cancel()
+				continue
 			}
 
 			if t.clearHistory {
@@ -77,6 +85,7 @@ func (agent *Agent) SubmitTask(ctx context.Context, prompt string, clearHistory 
 		prompt:       prompt,
 		clearHistory: clearHistory,
 		resultCh:     resultCh,
+		compress:     false,
 	}
 
 	agent.mutex.Lock()
@@ -95,3 +104,37 @@ func (agent *Agent) SubmitTask(ctx context.Context, prompt string, clearHistory 
 	}
 	return resultCh
 }
+
+
+
+// SubmitTask a compression task meant to be called manually by the user
+func (agent *Agent) SubmitCompress(timeout time.Duration) <-chan handles.TaskResult {
+	resultCh := make(chan handles.TaskResult, 1)
+
+	t := &task{
+		parentCtx:    context.Background(),
+		timeout:      timeout,
+		prompt:       "",
+		clearHistory: false,
+		resultCh:     resultCh,
+		compress:     true,
+	}
+
+	agent.mutex.Lock()
+	if agent.state == handles.AgentStateStopped {
+		agent.mutex.Unlock()
+		resultCh <- handles.TaskResult{Err: errors.New("agent is stopped")}
+		return resultCh
+	}
+	agent.queue = append(agent.queue, t)
+	agent.mutex.Unlock()
+
+	// wake up the worker; non-blocking, since the worker drains the whole queue once woken
+	select {
+	case agent.workCh <- struct{}{}:
+	default:
+	}
+	return resultCh
+}
+
+

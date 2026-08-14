@@ -71,7 +71,7 @@ func main() {
 			sv.Shutdown()
 			sv = startServer()	
 		default: 
-			fmt.Println("Unkown command: only exit, tui, reload are available!")
+			fmt.Println("Unkown command: only tui, reload are available!")
 		}	
 	}
 }

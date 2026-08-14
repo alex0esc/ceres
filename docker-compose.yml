@@ -17,7 +17,7 @@ services:
   sandbox:
     image: python:3.11-slim
     container_name: ceres-sandbox
-
+    user: "1000:1000"
     working_dir: /workspace
 
     volumes:

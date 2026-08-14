@@ -19,6 +19,8 @@ FROM alpine:latest
 
 # IMPORTANT for OpenAI & Discord: Install SSL certificates and timezone data
 RUN apk --no-cache add ca-certificates tzdata ncurses-terminfo
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
 
 WORKDIR /app
 

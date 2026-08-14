@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
@@ -14,6 +15,12 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 )
+
+// killAfterBuffer is added on top of the in-container "timeout" duration to
+// give the coreutils timeout(1) process a moment to actually terminate the
+// command (SIGTERM, then SIGKILL after --kill-after) before Go's exec
+// context also expires.
+const killAfterBuffer = 5 * time.Second
 
 // BashTool executes a shell command inside a separate sandbox container via
 // the Docker SDK. It is intended to give the agent an isolated environment
@@ -26,9 +33,16 @@ func (BashTool) Name() string {
 }
 
 func (BashTool) Description() string {
-	return "Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code. " +
-		"Use this for running shell commands, scripts, or for executing and debugging code you wrote. " +
-		"For programms that do not terminate use the Linux-Tool timeout for example 'timeout 5s python3 game.py'."
+	maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
+	if err != nil {
+		maxTimeout = 60 * time.Second
+	}
+	return fmt.Sprintf(
+		"Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code.\n"+
+			"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n" +
+			"The maximum allowed timeout is %s; you may optionally specify a shorter one via the \"timeout_seconds\" argument.",
+		maxTimeout,
+	)
 }
 
 func (BashTool) Parameters() map[string]any {
@@ -39,6 +53,10 @@ func (BashTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "The bash command to execute inside the sandbox container.",
 			},
+			"timeout_seconds": map[string]any{
+				"type":        "number",
+				"description": "Optional. Maximum time in seconds the command may run before being killed. Defaults to that maximum if set too long.",
+			},
 		},
 		"required":             []string{"command"},
 		"additionalProperties": false,
@@ -48,7 +66,8 @@ func (BashTool) Parameters() map[string]any {
 func (BashTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {
 		var args struct {
-			Command string `json:"command"`
+			Command        string   `json:"command"`
+			TimeoutSeconds *float64 `json:"timeout_seconds"`
 		}
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("bash: invalid arguments: %w", err)
@@ -58,21 +77,45 @@ func (BashTool) Handler() tool.ToolHandler {
 		}
 
 		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-		
 
-		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
 		if err != nil {
-			return "", fmt.Errorf("Error while parsing sandbox.bash.timeout in toolconfig.toml")
+			return "", fmt.Errorf("bash: error while parsing sandbox.bash.timeout in toolconfig.toml")
+		}
+		if maxTimeout <= 0 {
+			return "", fmt.Errorf("bash: sandbox.bash.timeout must be positive")
 		}
 
-		execCtx, cancel := context.WithTimeout(ctx, timeout)
+		sandboxTimeout := maxTimeout
+		if args.TimeoutSeconds != nil {
+			requested := time.Duration(*args.TimeoutSeconds * float64(time.Second))
+			if requested <= 0 {
+				return "", fmt.Errorf("bash: timeout_seconds must be greater than 0")
+			}
+			if requested > maxTimeout {
+				return "", fmt.Errorf("bash: timeout_seconds (%s) exceeds the maximum allowed timeout (%s)", requested, maxTimeout)
+			}
+			sandboxTimeout = requested
+		}
+
+		// The Go-side context is the hard upper bound (safety net). It must
+		// be strictly larger than sandboxTimeout so that "timeout" inside
+		// the container gets a real chance to fire (and, via --kill-after,
+		// escalate to SIGKILL) before we give up on reading its output.
+		execCtx, cancel := context.WithTimeout(ctx, sandboxTimeout+2*killAfterBuffer)
 		defer cancel()
 
-		stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), containerName, args.Command)
+		wrappedCmd := fmt.Sprintf(
+			"timeout --kill-after=%.0fs %.3fs bash -c %s",
+			killAfterBuffer.Seconds(),
+			sandboxTimeout.Seconds(),
+			shellQuote(args.Command),
+		)
+
+		stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), containerName, wrappedCmd)
 		if err != nil {
 			return "", fmt.Errorf("bash: failed to execute command in sandbox: %w", err)
 		}
-
 		out := struct {
 			Stdout   string `json:"stdout"`
 			Stderr   string `json:"stderr"`
@@ -82,7 +125,6 @@ func (BashTool) Handler() tool.ToolHandler {
 			Stderr:   stderr,
 			ExitCode: exitCode,
 		}
-
 		result, err := json.Marshal(out)
 		if err != nil {
 			return "", fmt.Errorf("bash: failed to marshal result: %w", err)
@@ -91,17 +133,19 @@ func (BashTool) Handler() tool.ToolHandler {
 	}
 }
 
-
-
 // runInContainer runs cmd via "bash -c" inside the given container using
 // Docker's exec API and returns separated stdout/stderr plus the exit code.
+// Reading of the exec's combined output stream is bound to ctx: if ctx is
+// cancelled before the stream ends (e.g. the in-container timeout did not
+// terminate the process for some reason, or the daemon connection hangs),
+// the read is abandoned, the exec is killed as a best-effort fallback, and
+// ctx.Err() is returned.
 func runInContainer(ctx context.Context, cli *client.Client, containerName, cmd string) (stdout string, stderr string, exitCode int, err error) {
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"bash", "-c", cmd},
 		AttachStdout: true,
 		AttachStderr: true,
 	}
-
 	execCreateResp, err := cli.ContainerExecCreate(ctx, containerName, execConfig)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to create exec: %w", err)
@@ -114,24 +158,55 @@ func runInContainer(ctx context.Context, cli *client.Client, containerName, cmd 
 	defer attachResp.Close()
 
 	var stdoutBuf, stderrBuf bytes.Buffer
-	if _, err := demuxDockerStream(attachResp.Reader, &stdoutBuf, &stderrBuf); err != nil && err != io.EOF {
-		return "", "", 0, fmt.Errorf("failed to read exec output: %w", err)
+	readDone := make(chan error, 1)
+	go func() {
+		_, copyErr := demuxDockerStream(attachResp.Reader, &stdoutBuf, &stderrBuf)
+		readDone <- copyErr
+	}()
+
+	select {
+	case copyErr := <-readDone:
+		if copyErr != nil && copyErr != io.EOF {
+			return "", "", 0, fmt.Errorf("failed to read exec output: %w", copyErr)
+		}
+	case <-ctx.Done():
+		attachResp.Close()
+		killExecProcess(context.Background(), cli, execCreateResp.ID)
+		return stdoutBuf.String(), stderrBuf.String(), -1, fmt.Errorf("command timed out: %w", ctx.Err())
 	}
 
 	inspectResp, err := cli.ContainerExecInspect(ctx, execCreateResp.ID)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to inspect exec result: %w", err)
 	}
-
 	return stdoutBuf.String(), stderrBuf.String(), inspectResp.ExitCode, nil
 }
 
+// killExecProcess is a best-effort fallback that terminates the process
+// backing execID by inspecting its PID and issuing a SIGKILL inside the
+// container. Errors are intentionally ignored.
+func killExecProcess(ctx context.Context, cli *client.Client, execID string) {
+	inspectResp, err := cli.ContainerExecInspect(ctx, execID)
+	if err != nil || inspectResp.Pid == 0 {
+		return
+	}
+	killExec, err := cli.ContainerExecCreate(ctx, inspectResp.ContainerID, container.ExecOptions{
+		Cmd: []string{"kill", "-9", fmt.Sprintf("%d", inspectResp.Pid)},
+	})
+	if err != nil {
+		return
+	}
+	_ = cli.ContainerExecStart(ctx, killExec.ID, container.ExecStartOptions{})
+}
+
 // demuxDockerStream splits Docker's multiplexed exec stream (stdcopy format)
-// into separate stdout/stderr writers. Docker's own stdcopy package could be
-// used here instead (github.com/docker/docker/pkg/stdcopy); this is a
-// placeholder call to make that dependency explicit.
+// into separate stdout/stderr writers.
 func demuxDockerStream(reader io.Reader, stdout, stderr io.Writer) (int64, error) {
 	return stdcopy.StdCopy(stdout, stderr, reader)
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func init() {

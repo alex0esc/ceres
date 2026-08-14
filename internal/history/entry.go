@@ -5,7 +5,7 @@ type EntryType int
 const (
 	EntryTypeUser = iota
 	EntryTypeAssistent
-	EntryTypeToolCall
+	EntryTypeSystemInfo
 )
 
 type Entry struct {
