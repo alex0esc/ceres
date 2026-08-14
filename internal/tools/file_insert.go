@@ -25,9 +25,18 @@ func (FileInsertTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"path":    map[string]any{"type": "string", "description": "Path to the file."},
-			"line":    map[string]any{"type": "integer", "description": "Line number before which content is inserted.", "minimum": 1},
-			"content": map[string]any{"type": "string", "description": "Content to insert."},
+			"path": map[string]any{
+				"type":        "string",
+				"description": "Path to the file.",
+			},
+			"line": map[string]any{
+				"type":        "integer",
+				"description": "Line number before which content is inserted (must be 1 or greater).",
+			},
+			"content": map[string]any{
+				"type":        "string",
+				"description": "Content to insert.",
+			},
 		},
 		"required":             []string{"path", "line", "content"},
 		"additionalProperties": false,

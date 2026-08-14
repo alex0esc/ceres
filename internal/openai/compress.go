@@ -67,7 +67,9 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 			OfInputItemList: inputItems,
 		},
 		Tools: nil, // Pass nil to disable function/tool calls completely
-	})
+	},
+	client.requestOpts()...
+	)
 	if err != nil {
 		return fmt.Errorf("failed to compress history: %w", err)
 	}

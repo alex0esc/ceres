@@ -23,19 +23,21 @@ func (GetTimeTool) Description() string {
 		   "ALWAYS use this tool to verify what is meant by today (e.g if the user sais 'what ... today?')!"
 }
 
+
 func (GetTimeTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"timezone": map[string]any{
-				"type":        "string",
+				"type":        []string{"string", "null"},
 				"description": "IANA timezone name, e.g. 'Europe/Berlin'. Defaults to UTC if omitted.",
 			},
 		},
-		"required":             []string{},
+		"required":             []string{"timezone"},
 		"additionalProperties": false,
 	}
 }
+
 
 func (GetTimeTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string) (string, error) {

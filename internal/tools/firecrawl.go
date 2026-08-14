@@ -59,6 +59,7 @@ func (t *WebExtractTool) Description() string {
 		"IMPORTANT: If info is missing from the result, don't guess it -- extract another page or tell the user it's missing!"
 }
 
+
 func (t *WebExtractTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -68,18 +69,19 @@ func (t *WebExtractTool) Parameters() map[string]any {
 				"description": "The URL of the page to extract content from.",
 			},
 			"only_main_content": map[string]any{
-				"type":        "boolean",
+				"type":        []string{"boolean", "null"},
 				"description": "If true (default), strips navigation, ads, and boilerplate, keeping only the main article/page content.",
 			},
 			"max_length": map[string]any{
-				"type":        "integer",
+				"type":        []string{"integer", "null"},
 				"description": "Optional. Truncate the returned Markdown to roughly this many characters (default: no truncation).",
 			},
 		},
-		"required": []string{"url"},
+		"required":             []string{"url", "only_main_content", "max_length"},
 		"additionalProperties": false,
 	}
 }
+
 
 func (t *WebExtractTool) apiKey() string {
 	apiKey := config.ReadEntry(tool.GetToolConfig(), "firecrawl.api_key", "")

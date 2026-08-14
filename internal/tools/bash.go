@@ -45,22 +45,23 @@ func (BashTool) Description() string {
 	)
 }
 
+
 func (BashTool) Parameters() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"command": map[string]any{
-				"type":        "string",
-				"description": "The bash command to execute inside the sandbox container.",
-			},
-			"timeout_seconds": map[string]any{
-				"type":        "number",
-				"description": "Optional. Maximum time in seconds the command may run before being killed. Defaults to that maximum if set too long.",
-			},
-		},
-		"required":             []string{"command"},
-		"additionalProperties": false,
-	}
+    return map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "command": map[string]any{
+                "type":        "string",
+                "description": "The bash command to execute inside the sandbox container.",
+            },
+            "timeout_seconds": map[string]any{
+                "type":        []string{"number", "null"}, 
+                "description": "Optional. Maximum time in seconds the command may run before being killed.",
+            },
+        },
+        "required":             []string{"command", "timeout_seconds"}, 
+        "additionalProperties": false,
+    }
 }
 
 func (BashTool) Handler() tool.ToolHandler {

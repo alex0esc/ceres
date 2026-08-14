@@ -17,6 +17,7 @@ import (
 type Client struct {
 	endpoint        *Endpoint
 	modelName       string
+	ExtraBody       map[string]any
 	ReasoningEffort openai.ReasoningEffort
 	SystemPrompt    string
 	chatHistory     []responses.ResponseInputItemUnionParam
@@ -53,23 +54,6 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		CompressionPromt: "Summerize your current chat history. Make it precise and short.",
 		NumMessagesToKeep: 8,
 	}
-}
-
-
-
-
-// builds the tool list for the request payload from client.Tools
-func (client *Client) toolParams() []responses.ToolUnionParam {
-	if len(client.Tools) == 0 {
-		return nil
-	}
-	params := make([]responses.ToolUnionParam, 0, len(client.Tools))
-	for _, t := range client.Tools {
-		tp := responses.ToolParamOfFunction(t.Name(), t.Parameters(), true) // strict mode
-		tp.OfFunction.Description = openai.String(t.Description())
-		params = append(params, tp)
-	}
-	return params
 }
 
 
@@ -174,7 +158,9 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 				Effort: client.ReasoningEffort,
 			},
 			Tools: client.toolParams(),
-		})
+		},
+		client.requestOpts()...
+		)
 
 		var tempAnswer strings.Builder
 		var finalOutput []responses.ResponseOutputItemUnion

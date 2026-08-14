@@ -48,6 +48,7 @@ func (t *SearxngTool) Description() string {
 		"Before doing the next search first check the current Results with web_extract and reason if you really need another search!" 
 }
 
+
 func (t *SearxngTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -57,14 +58,15 @@ func (t *SearxngTool) Parameters() map[string]any {
 				"description": "The search query to send to SearXNG.",
 			},
 			"max_results": map[string]any{
-				"type":        "integer",
+				"type":        []string{"integer", "null"},
 				"description": "Maximum number of results to return (default 5, max 20).",
 			},
 		},
-		"required": []string{"query"},
-		"additionalProperties": false,		
+		"required":             []string{"query", "max_results"},
+		"additionalProperties": false,
 	}
 }
+
 
 func (t *SearxngTool) baseURL() string {
 	url := config.ReadEntry(tool.GetToolConfig(), "searxng.url", "http://localhost:8080")

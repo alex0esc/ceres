@@ -5,6 +5,8 @@ import (
 
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/tool"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/responses"
 )
 
@@ -121,3 +123,27 @@ func (client *Client) appendReasoningSummary(item responses.ResponseReasoningIte
     client.chatHistory = append(client.chatHistory, msg)
 }
 */
+
+
+// builds the tool list for the request payload from client.Tools
+func (client *Client) toolParams() []responses.ToolUnionParam {
+	if len(client.Tools) == 0 {
+		return nil
+	}
+	params := make([]responses.ToolUnionParam, 0, len(client.Tools))
+	for _, t := range client.Tools {
+		tp := responses.ToolParamOfFunction(t.Name(), t.Parameters(), true) // strict mode
+		tp.OfFunction.Description = openai.String(t.Description())
+		params = append(params, tp)
+	}
+	return params
+}
+
+// returns request opts for ask stream and compress
+func (c *Client) requestOpts() []option.RequestOption {
+	opts := make([]option.RequestOption, 0, len(c.ExtraBody))
+	for k, v := range c.ExtraBody {
+		opts = append(opts, option.WithJSONSet(k, v))
+	}
+	return opts
+}

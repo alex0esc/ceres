@@ -36,6 +36,7 @@ func (FileReadTool) Description() string {
 	)
 }
 
+
 func (FileReadTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",

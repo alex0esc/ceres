@@ -1,3 +1,4 @@
+
 package agent
 
 import (
@@ -12,21 +13,22 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
-// AgentConfig is the on-disk representation of an agent, loaded from a
+// AgentConfig is the on-disk representation of an agent, loaded from a .toml file
 type AgentConfig struct {
-	Endpoint        string   `toml:"endpoint"`
-	ModelName       string   `toml:"model_name"`
-	Name            string   `toml:"name"`
-	Description     string   `toml:"description"`
-	ReasoningEffort string   `toml:"reasoning_effort"`
-	Quantity        int      `toml:"quantity"`
-	Subagent        bool     `toml:"subagent"`
-	MaxToolIterations int     `toml:"max_tool_iterations"`
-	Tools           []string `toml:"tools"`
-	SystemPrompt    string   `toml:"system_prompt"`
-    CompressionThreshold int64 `toml:"compression_threshold"`
-	NumMessagesToKeep int      `toml:"num_messages_to_keep"`
-    CompressionPromt string    `toml:"compressions_promt"`
+	Endpoint             string         `toml:"endpoint"`
+	ModelName            string         `toml:"model_name"`
+	ExtraBody            map[string]any `toml:"extra_body,omitempty"`
+	Name                 string         `toml:"name"`
+	Description          string         `toml:"description"`
+	ReasoningEffort      string         `toml:"reasoning_effort"`
+	Quantity             int            `toml:"quantity"`
+	Subagent             bool           `toml:"subagent"`
+	MaxToolIterations    int            `toml:"max_tool_iterations"`
+	Tools                []string       `toml:"tools"`
+	SystemPrompt         string         `toml:"system_prompt"`
+	CompressionThreshold int64          `toml:"compression_threshold"`
+	NumMessagesToKeep    int            `toml:"num_messages_to_keep"`
+	CompressionPromt     string         `toml:"compressions_promt"`
 }
 
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
@@ -56,7 +58,8 @@ func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Ag
 		}
 
 		client := openai.NewClient(&endpoint, cfg.ModelName)
-		//ensure <name> works for all quantities
+		client.ExtraBody = cfg.ExtraBody
+		// ensure <name> works for all quantities
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
 		client.ReasoningEffort = responses.ReasoningEffort(cfg.ReasoningEffort)
 		client.Tools = make(map[string]tool.Tool)
@@ -129,21 +132,21 @@ func EnsureOneAgentFile(dir string) error {
 	}
 	// keine Agent-Datei gefunden -> Default-Agent anlegen
 
-	
 	cfg := AgentConfig{
-		Name:            "Ceres",
-		ModelName:       "ornith:35b",
-		Description:     "The main agent of the system.",
-		ReasoningEffort: string(responses.ReasoningEffortMedium),
-		SystemPrompt:    "You are <name> a helpful AI assistant.",
-		Tools:           tool.Names(),
-		Endpoint:        "ollama",
-		Quantity:        1,
-		Subagent:        false,
-		MaxToolIterations: 30,
-		NumMessagesToKeep: 8,
+		Name:                 "Ceres",
+		ModelName:            "ornith:35b",
+		ExtraBody: nil,
+		Description:          "The main agent of the system.",
+		ReasoningEffort:      string(responses.ReasoningEffortMedium),
+		SystemPrompt:         "You are <name> a helpful AI assistant.",
+		Tools:                tool.Names(),
+		Endpoint:             "ollama",
+		Quantity:             1,
+		Subagent:             false,
+		MaxToolIterations:    30,
+		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
-		CompressionPromt: "Your task is to summerize the current chat. Make it precise and short.",
+		CompressionPromt:     "Your task is to summerize the current chat. Make it precise and short.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)

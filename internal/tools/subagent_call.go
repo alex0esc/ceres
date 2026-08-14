@@ -26,14 +26,14 @@ func (t *SubagentCall) Description() string {
 		"Busy does not mean a subagent is not callable, however if the agent is busy you task will be queued an may take longer."
 }
 
+
 func (t *SubagentCall) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"tasks": map[string]any{
 				"type":        "array",
-				"description": "List of tasks to submit. Can contain any number of entries.",
-				"minItems":    1,
+				"description": "List of tasks to submit. Must contain at least 1 entry.",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -46,12 +46,12 @@ func (t *SubagentCall) Parameters() map[string]any {
 							"description": "The task/instruction to send to the subagent.",
 						},
 					},
-					"required": []string{"agent", "task"},
+					"required":             []string{"agent", "task"},
 					"additionalProperties": false,
 				},
 			},
 		},
-		"required": []string{"tasks"},
+		"required":             []string{"tasks"},
 		"additionalProperties": false,
 	}
 }

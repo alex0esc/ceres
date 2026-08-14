@@ -30,21 +30,23 @@ func (t *DiscordPost) Description() string {
 	return "Sends a message to a discord channel identified by its name. If the channel does not exist yet, it will be created automatically before the message is sent."
 }
 
+
 func (t *DiscordPost) Parameters() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"channel": map[string]any{
-				"type":        "string",
-				"description": "The name of the discord channel to post the message to (without '#').",
-			},
-			"message": map[string]any{
-				"type":        "string",
-				"description": "The message content to send to the channel.",
-			},
-		},
-		"required": []string{"channel", "message"},
-	}
+    return map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "channel": map[string]any{
+                "type":        "string",
+                "description": "The name of the discord channel to post the message to (without '#').",
+            },
+            "message": map[string]any{
+                "type":        "string",
+                "description": "The message content to send to the channel.",
+            },
+        },
+        "required":             []string{"channel", "message"},
+        "additionalProperties": false,
+    }
 }
 
 type discordPostArgs struct {

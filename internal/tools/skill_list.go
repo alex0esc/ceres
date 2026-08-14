@@ -28,20 +28,21 @@ func (SkillListTool) Description() string {
 		"Listing can be recursive (including subdirectories)."
 }
 
+
 func (SkillListTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"subpath": map[string]any{
-				"type":        "string",
+				"type":        []string{"string", "null"},
 				"description": "Optional subpath relative to 'skills/' (e.g. 'docx'). Defaults to the root directory 'skills/'.",
 			},
 			"recursive": map[string]any{
-				"type":        "boolean",
+				"type":        []string{"boolean", "null"},
 				"description": "If true, all subdirectories are also searched recursively. Defaults to false (top level only).",
 			},
 		},
-		"required":             []string{},
+		"required":             []string{"subpath", "recursive"},
 		"additionalProperties": false,
 	}
 }
