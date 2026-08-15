@@ -28,12 +28,23 @@ func (s AgentState) String() string {
 }
 
 
+// type of task that should be done
+type TaskType int
+
+const(
+	TaskTypeAsk	= iota
+	TaskTypeClear
+	TaskTypeClearAsk
+	TaskTypeCompress
+)
+
+
 // AgentHandle describes everything a tool needs to know about an agent.
 type AgentHandle interface {
 	Name() string
 	Description() string
 	State() AgentState
-	SubmitTask(ctx context.Context, task string, clearHistory bool, timeout time.Duration) <-chan TaskResult
+	SubmitTask(ctx context.Context, task string, taskType TaskType, timeout time.Duration) <-chan TaskResult
 }
 
 //result returned by submitTask

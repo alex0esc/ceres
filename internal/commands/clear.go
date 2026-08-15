@@ -1,6 +1,10 @@
 package commands
 
 import (
+	"context"
+	"log"
+	"time"
+
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -16,8 +20,15 @@ func init() {
 
 func handleClear(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "*The clear command does not take arguments!*"
+		return "The clear command does not take arguments!"
 	}
-	agnt.(*agent.Agent).Client.ClearHistory()
-	return "*Agent history has been reset.*"
+
+	result := agnt.(*agent.Agent).SubmitTask(context.Background(), "", handles.TaskTypeClear, time.Minute * 20)
+	go func() {
+		res := <- result		
+		if res.Err != nil {
+			log.Printf("Error while after submitting clear: %v", res.Err)
+		}
+	}();
+	return "*Clear task has been submitted to the agents queue.*"
 }

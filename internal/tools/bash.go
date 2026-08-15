@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -34,9 +35,9 @@ func (BashTool) Name() string {
 
 func (BashTool) Description() string {
 	maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-	if err != nil {
-		maxTimeout = 60 * time.Second
-	}
+	if err != nil || maxTimeout <= 0 {
+		log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
+	}	
 	return fmt.Sprintf(
 		"Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code.\n"+
 			"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n" +
@@ -80,11 +81,8 @@ func (BashTool) Handler() tool.ToolHandler {
 		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
 
 		maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-		if err != nil {
-			return "", fmt.Errorf("bash: error while parsing sandbox.bash.timeout in toolconfig.toml")
-		}
-		if maxTimeout <= 0 {
-			return "", fmt.Errorf("bash: sandbox.bash.timeout must be positive")
+		if err != nil || maxTimeout <= 0 {
+			log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
 		}
 
 		sandboxTimeout := maxTimeout

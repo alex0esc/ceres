@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
@@ -95,7 +98,11 @@ func (t *SubagentCall) Handler() tool.ToolHandler {
 				continue
 			}
 
-			ch := agnt.SubmitTask(ctx, task.Task, true, 0)
+			timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", "1h"))
+			if err != nil {
+				log.Fatal("Could not read subagent.timeout from tool config!")
+			}
+			ch := agnt.SubmitTask(ctx, task.Task, handles.TaskTypeClearAsk, timeout)
 
 			pending = append(pending, pendingCall{
 				agentName: task.Agent,

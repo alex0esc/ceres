@@ -121,8 +121,12 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, userPrompt string) (string, error) {
-	client.appendUserMessage(userPrompt)
+func (client *Client) AskStream(ctx context.Context, userPrompt string, roleSystem bool) (string, error) {
+	if roleSystem {
+		client.appendSystemMessage(userPrompt)
+	} else {
+		client.appendUserMessage(userPrompt)
+	}
 
 	//allow cancable context with thread safety
 	runCtx, cancel := context.WithCancel(ctx)
@@ -223,16 +227,3 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string) (string,
 
 	return "", fmt.Errorf("max tool iterations (%d) exceeded", client.MaxToolIterations)
 }
-
-
-
-// interrupts the client while streaming and tells the modell
-func (client *Client) Interrupt() {
-    client.mutex.Lock()
-    defer client.mutex.Unlock()
-    if client.cancelActiveRun != nil {
-        client.cancelActiveRun()
-        client.cancelActiveRun = nil 
-    }
-}
-

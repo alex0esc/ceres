@@ -17,7 +17,7 @@ func init() {
 
 func handleInterrupt(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "*The interrupt command does not take arguments!*"
+		return "The interrupt command does not take arguments!"
 	}
 	agnt.(*agent.Agent).Client.Interrupt()
 	return "*Agent has been interrupted.*"

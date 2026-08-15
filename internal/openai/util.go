@@ -43,9 +43,19 @@ func (client *Client) GetHistory() *history.History {
 
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
-	client.Interrupt()
 	client.chatHistory = nil
 	client.TotalTokens = 0
+}
+
+
+// interrupts the client while streaming and tells the modell
+func (client *Client) Interrupt() {
+    client.mutex.Lock()
+    defer client.mutex.Unlock()
+    if client.cancelActiveRun != nil {
+        client.cancelActiveRun()
+        client.cancelActiveRun = nil 
+    }
 }
 
 
@@ -98,6 +108,13 @@ func (client *Client) ClearOnEvent() {
 
 func (client *Client) appendUserMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleUser,)
+	msg.OfMessage.Type = "message"
+	client.chatHistory = append(client.chatHistory, msg)	
+}
+
+
+func (client *Client) appendSystemMessage(promt string) {
+	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleSystem,)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)	
 }

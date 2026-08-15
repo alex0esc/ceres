@@ -112,7 +112,11 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		sendChunked(s, m.ChannelID, msg)
 		return
 	}
-	resultCh := agent.SubmitTask(context.Background(), m.Content, false, 60*time.Minute)
+	timeout, err := time.ParseDuration(config.ReadEntry(platform.GetPlatformConfig(), "discord.message_timeout", "60m"))
+	if err != nil {
+		log.Fatalf("error while parsing tui_timeout in server config: %v", err)
+	}
+	resultCh := agent.SubmitTask(context.Background(), m.Content, handles.TaskTypeAsk, timeout)
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {

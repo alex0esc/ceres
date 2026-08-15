@@ -2,13 +2,13 @@ package bubbletea
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/openai"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -110,11 +110,11 @@ func (tui *Tui) submitMessage() {
 		if !cmd {
 			tui.selectedAgent.Client.Interrupt()
 			tui.appendUserMessage(input)
-			timeout, err := time.ParseDuration(config.ReadEntry(tui.server.GetConfig(), "tui_msg_timeout", "60m"))
+			timeout, err := time.ParseDuration(config.ReadEntry(tui.server.GetConfig(), "tui.message_timeout", "60m"))
 			if err != nil {
-				panic(fmt.Sprintf("error while parsing tui_timeout in server config: %v", err))
+				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 			}
-			res := agnt.SubmitTask(context.Background(), input, false, timeout)
+			res := agnt.SubmitTask(context.Background(), input, handles.TaskTypeAsk, timeout)
 			go func() {
 				err := (<-res).Err
 				if err != nil {
