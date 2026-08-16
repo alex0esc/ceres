@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"github.com/alex0esc/ceres/pkg/config"
@@ -32,7 +33,7 @@ func SetSubagents(agents map[string]handles.AgentHandle) {
 
 func getSubagents() map[string]handles.AgentHandle {
 	if subAgents == nil {
-		panic("subagents have not been intialized!")
+		log.Fatal("subagents have not been intialized!")
 	}
 	return subAgents
 }
@@ -62,7 +63,7 @@ func InitDockerClient() error {
 
 func getDockerClient() *client.Client {
 	if dockerClient == nil {
-		panic("docker client not active or initialized!")
+		log.Fatal("docker client not active or initialized!")
 	}
 	return dockerClient	
 }

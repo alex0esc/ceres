@@ -111,7 +111,7 @@ func (t *DiscordTool) discordDM(message string) (string, error) {
 		return "", fmt.Errorf("discord_dm: failed to create DM channel with user %s: %w", userID, err)
 	}
 
-	if err := sendChunked(t.session, channel.ID, message); err != nil {
+	if err := SendChunked(t.session, channel.ID, message); err != nil {
 		return "", fmt.Errorf("discord_dm: failed to send direct message: %w", err)
 	}
 
@@ -167,7 +167,7 @@ func (t *DiscordTool) discordPost(channel, message string) (string, error) {
 		return "", fmt.Errorf("discord_post: channel %q does not exist, use action='create' first", channel)
 	}
 
-	if err := sendChunked(t.session, target.ID, message); err != nil {
+	if err := SendChunked(t.session, target.ID, message); err != nil {
 		return "", fmt.Errorf("discord_dm: failed to send direct message: %w", err)
 	}	
 
@@ -251,7 +251,7 @@ const discordMaxMessageLength = 1900
 
 // sendChunked sends msg to the given channel, splitting it into multiple
 // messages if it exceeds Discord's length limit.
-func sendChunked(s *discordgo.Session, channelID, msg string) error {
+func SendChunked(s *discordgo.Session, channelID, msg string) error {
 	for _, chunk := range splitMessage(msg, discordMaxMessageLength) {
 		if chunk == "" {
 			continue

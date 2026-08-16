@@ -60,19 +60,19 @@ func (t *Task) CheckRemaining() []string {
 }
 
 
-func NewTaskAsk(promt string, timeout time.Duration) Task {
+func TaskAsk(promt string, timeout time.Duration) Task {
 	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
 }
 
-func NewTaskClearAsk(promt string, timeout time.Duration) Task {
+func TaskClearAsk(promt string, timeout time.Duration) Task {
 	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClearAsk}
 }
 
-func NewTaskClear(timeout time.Duration) Task {
+func TaskClear(timeout time.Duration) Task {
 	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClear}
 }
 
-func NewTaskCompression(timeout time.Duration) Task {
+func TaskCompression(timeout time.Duration) Task {
 	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeCompress}
 }
 

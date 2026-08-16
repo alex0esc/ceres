@@ -48,7 +48,7 @@ func (agent *Agent) worker() {
 				t.ResultCh <- handles.TaskResult{Response: "", Err: nil}
 			case handles.TaskTypeAsk:
 				var fullResp strings.Builder
-				resp, err := agent.Client.AskStream(runCtx, t.Prompt, false, agent)
+				resp, err := agent.Client.AskStream(runCtx, t.Prompt, agent)
 				if err != nil {
 					t.ResultCh <- handles.TaskResult{Response: resp, Err: err}
 					goto Done
@@ -66,7 +66,7 @@ func (agent *Agent) worker() {
 						break	
 					}
 					resp, err = agent.Client.AskStream(runCtx,
-						fmt.Sprintf("Checklist is not empty, remaining tasks are: %s", quoteJoin(remaining)), true, agent)
+						fmt.Sprintf("[System]: Checklist is not empty, remaining tasks are: %s", quoteJoin(remaining)), agent)
 					if err != nil {
 						t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
 						goto Done

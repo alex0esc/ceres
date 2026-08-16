@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -26,7 +27,7 @@ var registry = map[string]Command{}
 func Register(cmd Command) {
 	_, ok := registry[cmd.Name]
 	if ok {
-		panic(fmt.Sprintf("command %s already registered", cmd.Name))
+		log.Fatalf("command %s already registered", cmd.Name)
 	}
 	registry[cmd.Name] = cmd
 }

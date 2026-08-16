@@ -146,7 +146,7 @@ func EnsureOneAgentFile(dir string) error {
 		MaxToolIterations:    30,
 		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
-		CompressionPromt:     "Your task is to summerize the current chat. Make it precise and short.",
+		CompressionPromt:     "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)

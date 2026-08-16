@@ -31,7 +31,7 @@ func (d *Discord) NewSession() error {
 	}
 	guildID := config.ReadEntry(platform.GetPlatformConfig(), "discord.guild_id", "<guild_id>")
 	//make sure discord post has the right parameters
-	tool.Get("discord_post").(*tools.DiscordTool).SetSessionGuildID(session, guildID)
+	tool.Get("discord").(*tools.DiscordTool).SetSessionGuildID(session, guildID)
 	d.session = session
 	return nil
 }
@@ -111,12 +111,15 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	if err != nil {
 		log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 	}
-	resultCh := agent.SubmitTask(handles.NewTaskAsk("# [Message from Discord]: Use the discord to DM back!\n\n" + m.Content, timeout))
+	resultCh := agent.SubmitTask(handles.TaskAsk(m.Content, timeout))
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
+	} else {
+		tools.SendChunked(s, m.ChannelID, result.Response)
 	}
+
 }
 
 

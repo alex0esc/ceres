@@ -1,8 +1,7 @@
 package platform
 
-
 import (
-	"fmt"
+	"log"
 
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -25,7 +24,7 @@ type Platform interface {
 func Register(plat Platform) {
 	name := plat.Name()
 	if _, exists := registry[name]; exists {
-		panic(fmt.Sprintf("platform %q already registered", name))
+		log.Fatalf("platform %q already registered", name)
 	}
 	registry[name] = plat
 }
@@ -35,7 +34,7 @@ func Register(plat Platform) {
 func Get(name string) Platform {
 	plat, exists := registry[name]
 	if !exists {
-		panic(fmt.Sprintf("unknown palform %s", name))
+		log.Fatalf("unknown palform %s", name)
 	} 
 	return plat
 }
@@ -52,7 +51,7 @@ func LoadPlatformConfig(path string) error {
 
 func GetPlatformConfig() *config.Config {
 	if cfg == nil {
-		panic("platforms: config not initialized.")
+		log.Fatal("platforms: config not initialized.")
 	}
 	return cfg
 }

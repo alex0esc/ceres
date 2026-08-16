@@ -80,7 +80,7 @@ func (sv *Server) startCroneJobs() error {
 	},
 	func(job cronjob.CronJobConfig) {
 		timeout, _ := time.ParseDuration(job.Timeout)
-		res := <- sv.agents[job.AgentName].SubmitTask(handles.NewTaskAsk(job.Prompt, timeout))
+		res := <- sv.agents[job.AgentName].SubmitTask(handles.TaskAsk(job.Prompt, timeout))
 		if res.Err != nil {
 			log.Printf("error while executing chrone job: %v", res.Err)
 		}

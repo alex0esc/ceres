@@ -52,7 +52,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		MaxToolIterations: 30,
 		endpoint: endpoint,
 		CompressionThreshold: 200000,
-		CompressionPromt: "Summerize your current chat history. Make it precise and short.",
+		CompressionPromt: "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
 		NumMessagesToKeep: 8,
 	}
 }
@@ -122,12 +122,8 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, userPrompt string, roleSystem bool, handle handles.AgentHandle) (string, error) {
-	if roleSystem {
-		client.appendSystemMessage(userPrompt)
-	} else {
-		client.appendUserMessage(userPrompt)
-	}
+func (client *Client) AskStream(ctx context.Context, userPrompt string, handle handles.AgentHandle) (string, error) {
+	client.appendUserMessage(userPrompt)
 
 	//allow cancable context with thread safety
 	runCtx, cancel := context.WithCancel(ctx)

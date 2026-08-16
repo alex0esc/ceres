@@ -113,7 +113,7 @@ func (tui *Tui) submitMessage() {
 			if err != nil {
 				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 			}
-			res := agnt.SubmitTask(handles.NewTaskAsk(input, timeout))
+			res := agnt.SubmitTask(handles.TaskAsk(input, timeout))
 			go func() {
 				err := (<-res).Err
 				if err != nil {

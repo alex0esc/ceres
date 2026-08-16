@@ -2,7 +2,7 @@ package tool
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -32,7 +32,7 @@ type Tool interface {
 func Register(t Tool) {
 	name := t.Name()
 	if _, exists := registry[name]; exists {
-		panic(fmt.Sprintf("tool %q already registered", name))
+		log.Fatalf("tool %q already registered", name)
 	}
 	registry[name] = t
 }
@@ -41,7 +41,7 @@ func Register(t Tool) {
 func Get(name string) Tool {
 	t, ok := registry[name]
 	if !ok {
-		panic(fmt.Sprintf("unknown tool: %s", name))
+		log.Fatalf("unknown tool: %s", name)
 	}
 	return t
 }

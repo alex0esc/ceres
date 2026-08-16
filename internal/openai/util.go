@@ -113,13 +113,6 @@ func (client *Client) appendUserMessage(promt string) {
 }
 
 
-func (client *Client) appendSystemMessage(promt string) {
-	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleSystem,)
-	msg.OfMessage.Type = "message"
-	client.chatHistory = append(client.chatHistory, msg)	
-}
-
-
 func (client *Client) appendAssistentMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
 	msg.OfMessage.Type = "message"
