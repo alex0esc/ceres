@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"log"
 	"time"
 
@@ -23,7 +22,7 @@ func handleClear(agnt handles.AgentHandle, args []string) string {
 		return "The clear command does not take arguments!"
 	}
 
-	result := agnt.(*agent.Agent).SubmitTask(context.Background(), "", handles.TaskTypeClear, time.Minute * 20)
+	result := agnt.(*agent.Agent).SubmitTask(handles.NewTaskClear(time.Minute))
 	go func() {
 		res := <- result		
 		if res.Err != nil {

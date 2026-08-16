@@ -39,12 +39,53 @@ const(
 )
 
 
+// task represents a single queued unit of work
+type Task struct {
+	ParentCtx    context.Context
+	Timeout      time.Duration
+	Prompt       string
+	Tasktype     TaskType
+	ResultCh     chan TaskResult
+	CheckList    map[string]bool
+}
+
+func (t *Task) CheckRemaining() []string {
+	remaining := make([]string, 0, len(t.CheckList))
+	for name, done := range t.CheckList {
+		if !done {
+			remaining = append(remaining, name)
+		}
+	}
+	return remaining
+}
+
+
+func NewTaskAsk(promt string, timeout time.Duration) Task {
+	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
+}
+
+func NewTaskClearAsk(promt string, timeout time.Duration) Task {
+	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClearAsk}
+}
+
+func NewTaskClear(timeout time.Duration) Task {
+	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClear}
+}
+
+func NewTaskCompression(timeout time.Duration) Task {
+	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeCompress}
+}
+
+
+
 // AgentHandle describes everything a tool needs to know about an agent.
 type AgentHandle interface {
 	Name() string
 	Description() string
 	State() AgentState
-	SubmitTask(ctx context.Context, task string, taskType TaskType, timeout time.Duration) <-chan TaskResult
+	SubmitTask(task Task) <-chan TaskResult
+	CheckListSet(checkList map[string]bool)
+	CheckListPop(name string) error
 }
 
 //result returned by submitTask

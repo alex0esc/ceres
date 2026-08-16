@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
@@ -101,7 +102,7 @@ func (t *WebExtractTool) client() *http.Client {
 }
 
 func (t *WebExtractTool) Handler() tool.ToolHandler {
-	return func(ctx context.Context, argumentsJSON string) (string, error) {
+	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args webExtractArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("invalid arguments: %w", err)

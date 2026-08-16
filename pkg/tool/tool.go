@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/handles"
 )
 
 // Holds the global tool config
@@ -16,7 +17,7 @@ var registry = map[string]Tool{}
 
 
 // ToolHandler executes a tool with raw JSON input and returns raw JSON output.
-type ToolHandler func(ctx context.Context, argumentsJSON string) (string, error)
+type ToolHandler func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error)
 
 // Tool describes a function that can be called by an AI agent.
 type Tool interface {

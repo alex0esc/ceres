@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
@@ -40,7 +41,7 @@ func (GetTimeTool) Parameters() map[string]any {
 
 
 func (GetTimeTool) Handler() tool.ToolHandler {
-	return func(ctx context.Context, argumentsJSON string) (string, error) {
+	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Timezone string `json:"timezone"`
 		}

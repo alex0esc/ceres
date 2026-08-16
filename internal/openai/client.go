@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -62,7 +63,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 // function-call items are executed and their call+result appended.
 // Returns the concatenated assistant text found in this output, whether
 // any tool calls were found, and an error if one occurred.
-func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion) (bool, error) {
+func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion, handle handles.AgentHandle) (bool, error) {
 	foundCall := false
 
 	for _, item := range output {
@@ -100,7 +101,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			if !ok {
 				result = fmt.Sprintf(`{"error": "unknown tool %q"}`, v.Name)
 			} else {
-				out, err := tool.Handler()(ctx, v.Arguments)
+				out, err := tool.Handler()(ctx, v.Arguments, handle)
 				if err != nil {
 					result = fmt.Sprintf(`{"error": %q}`, err.Error())
 				} else {
@@ -121,7 +122,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, userPrompt string, roleSystem bool) (string, error) {
+func (client *Client) AskStream(ctx context.Context, userPrompt string, roleSystem bool, handle handles.AgentHandle) (string, error) {
 	if roleSystem {
 		client.appendSystemMessage(userPrompt)
 	} else {
@@ -214,7 +215,7 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, roleSyst
 			return "", err
 		}
 
-		hadToolCalls, err := client.handleToolCalls(runCtx, finalOutput)
+		hadToolCalls, err := client.handleToolCalls(runCtx, finalOutput, handle)
 		if err != nil {
 			return "", fmt.Errorf("Error handling tool calls: %w", err)
 		}

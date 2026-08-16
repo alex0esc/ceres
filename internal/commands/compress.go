@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"log"
 	"time"
 
@@ -23,7 +22,7 @@ func handleCompress(agnt handles.AgentHandle, args []string) string {
 		return "The compress command does not take arguments!"
 	}
 
-	result := agnt.(*agent.Agent).SubmitTask(context.Background(), "", handles.TaskTypeCompress, time.Minute * 20)
+	result := agnt.(*agent.Agent).SubmitTask(handles.NewTaskCompression(20 * time.Minute))
 	go func() {
 		res := <- result		
 		if res.Err != nil {

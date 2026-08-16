@@ -1,10 +1,8 @@
 package platforms
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/tools"
@@ -16,10 +14,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// discordMaxMessageLength is the maximum number of characters allowed per
-// Discord message. Discord's hard limit is 2000 for normal messages (up to
-// 4000 in some boosted contexts); we stay safely under that.
-const discordMaxMessageLength = 1900
+
 
 type Discord struct {
 	session *discordgo.Session
@@ -36,7 +31,7 @@ func (d *Discord) NewSession() error {
 	}
 	guildID := config.ReadEntry(platform.GetPlatformConfig(), "discord.guild_id", "<guild_id>")
 	//make sure discord post has the right parameters
-	tool.Get("discord_post").(*tools.DiscordPost).SetSessionGuildID(session, guildID)
+	tool.Get("discord_post").(*tools.DiscordTool).SetSessionGuildID(session, guildID)
 	d.session = session
 	return nil
 }
@@ -109,21 +104,19 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	}()
 	if cmd, msg := command.CheckCommand(agent, m.Content); cmd {
 		close(stopTyping)
-		sendChunked(s, m.ChannelID, msg)
+		s.ChannelMessageSend(m.ChannelID, msg)
 		return
 	}
 	timeout, err := time.ParseDuration(config.ReadEntry(platform.GetPlatformConfig(), "discord.message_timeout", "60m"))
 	if err != nil {
 		log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 	}
-	resultCh := agent.SubmitTask(context.Background(), m.Content, handles.TaskTypeAsk, timeout)
+	resultCh := agent.SubmitTask(handles.NewTaskAsk("# [Message from Discord]: Use the discord to DM back!\n\n" + m.Content, timeout))
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {
-		sendChunked(s, m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
-		return
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
 	}
-	sendChunked(s, m.ChannelID, result.Response)
 }
 
 
@@ -138,62 +131,6 @@ func (d *Discord) StopListen() {
 	default:
 		close(d.stopChannel)
 	}
-}
-
-// sendChunked sends msg to the given channel, splitting it into multiple
-// messages if it exceeds Discord's length limit.
-func sendChunked(s *discordgo.Session, channelID, msg string) {
-	for _, chunk := range splitMessage(msg, discordMaxMessageLength) {
-		if chunk == "" {
-			continue
-		}
-		if _, err := s.ChannelMessageSend(channelID, chunk); err != nil {
-			log.Printf("error while sending message to discord: %v", err)
-			return
-		}
-	}
-}
-
-
-// splitMessage splits s into chunks of at most maxLen characters, preferring
-// to break on newlines and, failing that, on spaces, so that words and lines
-// aren't cut in the middle where possible.
-func splitMessage(s string, maxLen int) []string {
-	if len(s) <= maxLen {
-		return []string{s}
-	}
-
-	var chunks []string
-	for len(s) > maxLen {
-		limit := maxLen
-
-		// try to break on the last newline within the limit
-		splitAt := -1
-		if idx := lastIndexInRange(s, "\n", limit); idx > 0 {
-			splitAt = idx + 1 // include the newline in the current chunk
-		} else if idx := lastIndexInRange(s, " ", limit); idx > 0 {
-			splitAt = idx + 1 // include the space in the current chunk
-		} else {
-			splitAt = limit // hard cut, no good break point found
-		}
-
-		chunks = append(chunks, s[:splitAt])
-		s = s[splitAt:]
-	}
-	if len(s) > 0 {
-		chunks = append(chunks, s)
-	}
-	return chunks
-}
-
-
-// lastIndexInRange returns the last index of sep within s[:limit], or -1 if
-// not found.
-func lastIndexInRange(s, sep string, limit int) int {
-	if limit > len(s) {
-		limit = len(s)
-	}
-	return strings.LastIndex(s[:limit], sep)
 }
 
 

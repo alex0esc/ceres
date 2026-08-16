@@ -1,7 +1,6 @@
 package bubbletea
 
 import (
-	"context"
 	"log"
 	"time"
 
@@ -114,7 +113,7 @@ func (tui *Tui) submitMessage() {
 			if err != nil {
 				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 			}
-			res := agnt.SubmitTask(context.Background(), input, handles.TaskTypeAsk, timeout)
+			res := agnt.SubmitTask(handles.NewTaskAsk(input, timeout))
 			go func() {
 				err := (<-res).Err
 				if err != nil {
