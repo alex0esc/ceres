@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/alex0esc/ceres/internal/agent"
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -14,7 +14,7 @@ import (
 )
 
 // used to send messages to tui
-type TokenMsg openai.Token
+type TokenMsg inference.Token
 
 // focused componen saved as number
 type focusState int

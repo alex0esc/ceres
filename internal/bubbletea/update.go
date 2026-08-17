@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -144,7 +144,7 @@ func (tui *Tui) applyListSelection() {
 		tui.selectedAgent = tui.server.GetAgent(selected.botName)
 		tui.loadAgentHistory()
 		tui.viewport.SetContent(tui.getContentString())
-		tui.selectedAgent.Client.SetOnEvent(func(token openai.Token) {
+		tui.selectedAgent.Client.SetOnEvent(func(token inference.Token) {
 			tui.inputChan <- TokenMsg(token)
 		})
 	}
@@ -181,7 +181,7 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token TokenMsg) {
 	switch token.Type {
-	case openai.TokenEndOfSequence:
+	case inference.TokenEndOfSequence:
 		tui.mergeTokens()
 	default:
 		tui.tokens = append(tui.tokens, token)

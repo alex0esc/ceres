@@ -14,6 +14,7 @@ const (
 	ThemeColorInactive  = lipgloss.Color("#44475A") // Dracula Comment (gedämpftes Blaugrau)
 	ThemeColorSystem    = lipgloss.Color("#40E0D0")
 	ThemeColorUser      = lipgloss.Color("#AAAAFF")
+	ThemeColorReasoning = lipgloss.Color("#999999")
 )
 
 func (tui *Tui) View() string {

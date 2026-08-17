@@ -1,8 +1,7 @@
-package openai
+package inference
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -63,33 +62,50 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 // function-call items are executed and their call+result appended.
 // Returns the concatenated assistant text found in this output, whether
 // any tool calls were found, and an error if one occurred.
-func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion, handle handles.AgentHandle) (bool, error) {
+func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion, handle handles.AgentHandle, tempAnswer *strings.Builder) (bool, error) {
 	foundCall := false
 
+
+	var message strings.Builder
 	for _, item := range output {
 		switch v := item.AsAny().(type) {
 
 		//put reasoning in the chat history for the bot to have more context
-		case responses.ResponseReasoningItem:
-    		var converted responses.ResponseInputItemUnion
-    		if err := json.Unmarshal([]byte(v.RawJSON()), &converted); err != nil {
-    		    return false, fmt.Errorf("failed to convert reasoning item: %w", err)
-    		}
-    		client.chatHistory = append(client.chatHistory, converted.ToParam())
+		case responses.ResponseReasoningItem:    		
+			summary := ""
+			for _, part := range v.Content {
+				summary += part.Text
+			}
+			if summary == "" {
+				for _, part := range v.Summary {
+					summary += part.Text
+				}
+			}
+			if summary != "" {
+				message.WriteString("<think>\n")
+				message.WriteString(summary)
+				message.WriteString("\n</think>\n\n")
+			}
 
 			
 		case responses.ResponseOutputMessage:
-			var msgText strings.Builder
 			for _, part := range v.Content {
 				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
-					msgText.WriteString(t.Text)
+					message.WriteString(t.Text)
 				}
 			}
-			if msgText.Len() > 0 {
-				client.appendAssistentMessage(msgText.String())
+
+			if message.Len() > 0 {
+				client.appendAssistentMessage(message.String())
+				message.Reset()
 			}
 
 		case responses.ResponseFunctionToolCall:
+			if message.Len() > 0 {
+				client.appendAssistentMessage(message.String())
+				message.Reset()
+			}
+			
 			foundCall = true
 
 			client.chatHistory = append(client.chatHistory,
@@ -97,6 +113,13 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			)
 
 			tool, ok := client.Tools[v.Name]
+
+			// fires as soon as a new output item starts; used here to
+			call_text := fmt.Sprintf("Calling tool [%s] with arguments %s...", v.Name, v.Arguments)
+			tempAnswer.WriteString(call_text);
+			client.triggerOnEvent(NewToken(TokenTypeSystemInfo, call_text))
+			client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
+
 			var result string
 			if !ok {
 				result = fmt.Sprintf(`{"error": "unknown tool %q"}`, v.Name)
@@ -113,6 +136,10 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				responses.ResponseInputItemParamOfFunctionCallOutput(v.CallID, result),
 			)
 		}
+	}
+	if message.Len() > 0 {
+		client.appendAssistentMessage(message.String())
+		message.Reset()
 	}
 	return foundCall, nil
 }
@@ -165,33 +192,28 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 
 		var tempAnswer strings.Builder
 		var finalOutput []responses.ResponseOutputItemUnion
-		var lastFcName string
 		for stream.Next() {
 			event := stream.Current()
 			switch e := event.AsAny().(type) {
+			case responses.ResponseReasoningTextDeltaEvent, responses.ResponseReasoningSummaryTextDeltaEvent:
+				client.triggerOnEvent(NewToken(TokenTypeReasoning, event.Delta))				
 
 			case responses.ResponseTextDeltaEvent:
 				client.triggerOnEvent(NewToken(TokenTypeAssistent, e.Delta))
 				tempAnswer.WriteString(e.Delta)
 
-			case responses.ResponseOutputItemAddedEvent:
-			    if fc, ok := e.Item.AsAny().(responses.ResponseFunctionToolCall); ok {
-			        lastFcName = fc.Name
-				} 
-				//skip reasoning items
-				if _, ok := e.Item.AsAny().(responses.ResponseReasoningItem); ok {
+			case responses.ResponseOutputItemAddedEvent: 
+				if _, ok := e.Item.AsAny().(responses.ResponseReasoningItem); ok || e.Item.Type == "reasoningmessage" {
+					continue
+				}
+
+				if _, ok := e.Item.AsAny().(responses.ResponseFunctionToolCall); ok {
+					client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
 					continue
 				}
 				//mark the end of the current msg generation
 				client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
 				tempAnswer.WriteString("\n\n")
-
-			case responses.ResponseFunctionCallArgumentsDoneEvent:
-				// fires as soon as a new output item starts; used here to
-				call_text := fmt.Sprintf("Calling tool [%s] with arguments %s...", lastFcName, e.Arguments)
-
-				tempAnswer.WriteString(call_text)
-				client.triggerOnEvent(NewToken(TokenTypeSystemInfo, call_text))
 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls
@@ -200,10 +222,9 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 			}
 		}
 
-		fullAnswer.WriteString(tempAnswer.String())
-		
 		if errors.Is(stream.Err(), context.Canceled) {
 			client.appendAssistentMessage(tempAnswer.String())
+			fullAnswer.WriteString(tempAnswer.String())
 			return fullAnswer.String(), nil
 		}
 		
@@ -211,15 +232,16 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 			return "", err
 		}
 
-		hadToolCalls, err := client.handleToolCalls(runCtx, finalOutput, handle)
+		hadToolCalls, err := client.handleToolCalls(runCtx, finalOutput, handle, &tempAnswer)
 		if err != nil {
 			return "", fmt.Errorf("Error handling tool calls: %w", err)
 		}
 
+		fullAnswer.WriteString(tempAnswer.String())
+
 		if !hadToolCalls {
 			return fullAnswer.String(), nil
 		}
-		// otherwise: history contains call + result -> next streaming round
 	}
 
 	return "", fmt.Errorf("max tool iterations (%d) exceeded", client.MaxToolIterations)

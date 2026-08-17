@@ -1,11 +1,10 @@
-
 package tools
+
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -23,10 +22,8 @@ func (FileReadTool) Name() string {
 }
 
 func (FileReadTool) Description() string {
-	maxSize, err := parseMaxFileSize()
-	if err != nil {
-		log.Fatalf("error while parsing file_read.max_size: %v", err)
-	}
+	var def_size int64 = 1024 * 40
+	maxSize := config.ReadEntry(tool.GetToolConfig(), "file_read.max_size_b", def_size)
 	return fmt.Sprintf(
 		"Reads a file inside the sandbox container and returns its content with each line prefixed by its line number "+
 			"(format: \"<line_number>: <content>\"). Use the line numbers to target specific lines with file-editing tools. "+
@@ -79,17 +76,16 @@ func (FileReadTool) Handler() tool.ToolHandler {
 		}
 
 		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
+		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
 		if err != nil {
-			return "", fmt.Errorf("file_read: error while parsing sandbox.bash.timeout in toolconfig.toml")
+			return "", fmt.Errorf("file_read: error while parsing sandbox.timeout in toolconfig.toml")
 		}
 		if timeout <= 0 {
-			return "", fmt.Errorf("file_read: sandbox.bash.timeout must be positive")
+			return "", fmt.Errorf("file_read: sandbox.timeout must be positive")
 		}
-		maxSize, err := parseMaxFileSize()
-		if err != nil {
-			log.Fatalf("error while parsing file_read.max_size: %v", err)
-		}
+
+		var def_size int64 = 1024 * 40
+		maxSize := config.ReadEntry(tool.GetToolConfig(), "file_read.max_size_b", def_size)
 
 		cli := getDockerClient()
 
@@ -149,20 +145,6 @@ func (FileReadTool) Handler() tool.ToolHandler {
 		}
 		return string(result), nil
 	}
-}
-
-// parseMaxFileSize reads and parses file_read.max_size from the tool config.
-// The value is a plain byte count (e.g. "1048576"). Defaults to 1 MiB.
-func parseMaxFileSize() (int64, error) {
-	raw := config.ReadEntry(tool.GetToolConfig(), "file_read.max_size", "1048576")
-	maxSize, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid value %q: %w", raw, err)
-	}
-	if maxSize <= 0 {
-		return 0, fmt.Errorf("must be a positive number of bytes, got %q", raw)
-	}
-	return maxSize, nil
 }
 
 

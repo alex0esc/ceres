@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
@@ -28,16 +28,9 @@ func (tui *Tui) newRendererAgent(width int) glamour.TermRenderer {
 
 func (tui *Tui) newRendererUser(width int) glamour.TermRenderer {
     style := styles.DraculaStyleConfig
-    italic := true
     margin := uint(5)
 
-    // Basis-Dokument
     style.Document.Margin = &margin
-
-    // Text & Absätze
-    style.Text.Italic = &italic
-
-    // Zitate & Listen
     style.List.LevelIndent = uint(2)
 
     renderer, err := glamour.NewTermRenderer(
@@ -66,6 +59,19 @@ func (tui *Tui) renderSystem(text string) string {
 }
 
 
+func (tui *Tui) renderReasoning(text string) string {
+	rendered, err := tui.rendererAgent.Render(text)
+	if err != nil {
+		rendered = text
+	}
+	cleanText := ansi.Strip(rendered)
+	systemStyle := lipgloss.NewStyle().
+		Foreground(ThemeColorReasoning).
+		Italic(true)
+	return systemStyle.Render(cleanText)
+}
+
+
 func (tui *Tui) loadAgentHistory() {
 	if tui.selectedAgent == nil {
 		return
@@ -81,6 +87,8 @@ func (tui *Tui) loadAgentHistory() {
 			tui.appendUserMessage(entry.Content)
 		case history.EntryTypeSystemInfo:
 			tui.appendSystemMessage(entry.Content)
+		case history.EntryTypeReasoning:
+			tui.appendReasoningMessage(entry.Content)
 		}
 		
 	}
@@ -104,16 +112,20 @@ func (tui *Tui) getContentString() string {
 			
 		var rendered string
 		var err error = nil
-		if len(tui.tokens) > 0 && tui.tokens[0].Type == openai.TokenTypeSystemInfo {
+		switch tui.tokens[0].Type {
+		case inference.TokenTypeSystemInfo:
 			rendered = tui.renderSystem(tokenText.String())
-		} else {
+		case inference.TokenTypeReasoning:
+			rendered = tui.renderReasoning(tokenText.String())
+		default:
 			rendered, err = tui.rendererAgent.Render(tokenText.String())
 		}
 		if err != nil {
 			rendered = tokenText.String()
-		}	
+		}
 		text.WriteString(rendered)
 	}
+
 	return text.String()
 }
 
@@ -127,12 +139,14 @@ func (tui *Tui) mergeTokens() {
 		text.WriteString(token.Content)
 	}
 	switch tui.tokens[0].Type {
-	case openai.TokenTypeAssistent, openai.TokenEndOfSequence: 
+	case inference.TokenTypeAssistent, inference.TokenEndOfSequence: 
 		tui.appendAgentMessage(text.String())
-	case openai.TokenTypeUser: 
+	case inference.TokenTypeUser: 
 		tui.appendUserMessage(text.String())
-	case openai.TokenTypeSystemInfo:
+	case inference.TokenTypeSystemInfo:
 		tui.appendSystemMessage(text.String())
+	case inference.TokenTypeReasoning:
+		tui.appendReasoningMessage(text.String())
 	}
 	tui.tokens = nil
 }
@@ -147,8 +161,7 @@ func (tui *Tui) appendUserMessage(msg string) {
     cleanText := ansi.Strip(rendered)
 
     userStyle := lipgloss.NewStyle().
-        Foreground(ThemeColorUser).
-        Italic(true)
+        Foreground(ThemeColorUser)
 
     tui.messages = append(tui.messages, userStyle.Render(cleanText))
 }
@@ -165,4 +178,8 @@ func (tui *Tui) appendAgentMessage(msg string) {
 
 func (tui *Tui) appendSystemMessage(msg string) {
 	tui.messages = append(tui.messages, tui.renderSystem(msg))
+}
+
+func (tui *Tui) appendReasoningMessage(msg string) {
+	tui.messages = append(tui.messages, tui.renderReasoning(msg))
 }

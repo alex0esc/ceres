@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alex0esc/ceres/internal/agent"
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/platform"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -13,7 +13,7 @@ import (
 
 
 type Server struct {
-	endpoints map[string]openai.Endpoint	
+	endpoints map[string]inference.Endpoint	
 	agents map[string]*agent.Agent
 	croneJobs *cron.Cron
 	config *config.Config
@@ -32,7 +32,7 @@ func NewServer() (*Server, error) {
 	platform.LoadPlatformConfig(PlatformConfigPath)
 
 	// load endpoints configurations
-	endpoints, err := openai.LoadEndpointsFromConfig(EndpointsConfigPath)
+	endpoints, err := inference.LoadEndpointsFromConfig(EndpointsConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %v", EndpointsConfigPath, err)
 	}	

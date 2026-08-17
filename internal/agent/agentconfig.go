@@ -1,4 +1,3 @@
-
 package agent
 
 import (
@@ -8,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3/responses"
 )
@@ -34,7 +33,7 @@ type AgentConfig struct {
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
 // matching endpoint and tools from the provided registries. If Quantity is
 // greater than 1, multiple agents are returned, named "<name>-1" .. "<name>-n".
-func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Agent, error) {
+func LoadAgentFromFile(path string, endpoints map[string]inference.Endpoint) ([]*Agent, error) {
 	var cfg AgentConfig
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode agent config %q: %w", path, err)
@@ -57,7 +56,7 @@ func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Ag
 			name = fmt.Sprintf("%s-%d", cfg.Name, i+1)
 		}
 
-		client := openai.NewClient(&endpoint, cfg.ModelName)
+		client := inference.NewClient(&endpoint, cfg.ModelName)
 		client.ExtraBody = cfg.ExtraBody
 		// ensure <name> works for all quantities
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
@@ -85,7 +84,7 @@ func LoadAgentFromFile(path string, endpoints map[string]openai.Endpoint) ([]*Ag
 // LoadAgentsFromDir reads every .toml file in the given directory and loads
 // each one as an Agent (or several, if quantity > 1), wiring it up against
 // the provided endpoints.
-func LoadAgentsFromDir(dir string, endpoints map[string]openai.Endpoint) (map[string]*Agent, error) {
+func LoadAgentsFromDir(dir string, endpoints map[string]inference.Endpoint) (map[string]*Agent, error) {
 	err := EnsureOneAgentFile(dir)
 	if err != nil {
 		return nil, err

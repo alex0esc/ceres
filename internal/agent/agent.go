@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alex0esc/ceres/internal/openai"
+	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
@@ -13,7 +13,7 @@ import (
 type Agent struct {
 	name        string
 	description string
-	Client      *openai.Client
+	Client      *inference.Client
 	subagent    bool
 
 	mutex         sync.Mutex
@@ -25,7 +25,7 @@ type Agent struct {
 	currentTask   *handles.Task
 }
 
-func NewAgent(name, description string, client *openai.Client, subagent bool) *Agent {
+func NewAgent(name, description string, client *inference.Client, subagent bool) *Agent {
 	return &Agent{
 		name:        name,
 		description: description,
@@ -80,6 +80,7 @@ func (agent *Agent) State() handles.AgentState {
 func (agent *Agent) Name() string        { return agent.name }
 func (agent *Agent) Description() string { return agent.description }
 func (agent *Agent) IsSubagent() bool    { return agent.subagent }
+func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
 
 
 

@@ -86,6 +86,7 @@ type AgentHandle interface {
 	SubmitTask(task Task) <-chan TaskResult
 	CheckListSet(checkList map[string]bool)
 	CheckListPop(name string) error
+	ClientHandle() ClientHandle
 }
 
 //result returned by submitTask
@@ -95,3 +96,6 @@ type TaskResult struct {
 }
 
 
+type ClientHandle interface {
+	AppendImage(base64Image string, mimeType string, promt string)
+}

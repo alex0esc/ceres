@@ -5,6 +5,7 @@ type EntryType int
 const (
 	EntryTypeUser = iota
 	EntryTypeAssistent
+	EntryTypeReasoning
 	EntryTypeSystemInfo
 )
 
