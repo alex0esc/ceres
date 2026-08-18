@@ -22,7 +22,8 @@ func handleCompress(agnt handles.AgentHandle, args []string) string {
 		return "The compress command does not take arguments!"
 	}
 
-	result := agnt.(*agent.Agent).SubmitTask(handles.TaskCompression(20 * time.Minute))
+	task := handles.TaskCompression(20 * time.Minute)
+	result := agnt.(*agent.Agent).SubmitTask(&task)
 	go func() {
 		res := <- result		
 		if res.Err != nil {

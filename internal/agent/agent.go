@@ -2,7 +2,6 @@ package agent
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/alex0esc/ceres/internal/inference"
@@ -81,31 +80,7 @@ func (agent *Agent) Name() string        { return agent.name }
 func (agent *Agent) Description() string { return agent.description }
 func (agent *Agent) IsSubagent() bool    { return agent.subagent }
 func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
+func (agent *Agent) CurrentTask() *handles.Task        { return agent.currentTask }
 
 
 
-func (agent *Agent) CheckListSet(checkList map[string]bool) {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	if agent.currentTask == nil {
-		return
-	}
-	agent.currentTask.CheckList = checkList
-}
-
-
-//removes a checklist item by name
-func (agent *Agent) CheckListPop(name string) error {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	if agent.currentTask == nil {
-		return nil
-	}
-	cl := agent.currentTask.CheckList
-	_, ok := cl[name]
-	if !ok {
-		return fmt.Errorf("The item with name %s is not part of the checklist.", name)
-	}
-	cl[name] = true
-	return nil
-}

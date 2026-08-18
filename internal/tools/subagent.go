@@ -151,7 +151,8 @@ func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string,
 		if err != nil {
 			log.Fatal("Could not read subagent.timeout from tool config!")
 		}
-		ch := agnt.SubmitTask(handles.TaskClearAsk(task.Task, timeout))
+		sub_task := handles.TaskClearAsk(task.Task, timeout)
+		ch := agnt.SubmitTask(&sub_task)
 		pending = append(pending, pendingCall{
 			agentName: task.Agent,
 			ch:        ch,

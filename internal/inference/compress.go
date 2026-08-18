@@ -54,7 +54,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	inputItems := make([]responses.ResponseInputItemUnionParam, 0, len(toCompress)+1)
 	inputItems = append(inputItems, toCompress...)
 
-	promptMsg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
+	promptMsg := responses.ResponseInputItemParamOfMessage("[System]: " + prompt, responses.EasyInputMessageRoleUser)
 	promptMsg.OfMessage.Type = "message"
 
 	inputItems = append(inputItems, promptMsg)

@@ -22,7 +22,8 @@ func handleClear(agnt handles.AgentHandle, args []string) string {
 		return "The clear command does not take arguments!"
 	}
 
-	result := agnt.(*agent.Agent).SubmitTask(handles.TaskClear(time.Minute))
+	task := handles.TaskClear(time.Minute)
+	result := agnt.(*agent.Agent).SubmitTask(&task)
 	go func() {
 		res := <- result		
 		if res.Err != nil {

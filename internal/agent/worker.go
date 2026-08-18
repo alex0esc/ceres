@@ -59,14 +59,12 @@ func (agent *Agent) worker() {
 						t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
 						goto Done
 					}
-					agent.mutex.Lock()
 					remaining := t.CheckRemaining()
-					agent.mutex.Unlock()
 					if len(remaining) <= 0 {
 						break	
 					}
 					resp, err = agent.Client.AskStream(runCtx,
-						fmt.Sprintf("[System]: Checklist is not empty, remaining tasks are: %s", quoteJoin(remaining)), agent)
+						fmt.Sprintf("[System]: Checklist is not finished, remaining tasks are: %s", quoteJoin(remaining)), agent)
 					if err != nil {
 						t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
 						goto Done
@@ -77,15 +75,13 @@ func (agent *Agent) worker() {
 
 			Done:
 			cancel()
-			agent.mutex.Lock()
 			agent.currentTask = nil
-			agent.mutex.Unlock()
 		}
 	}
 }
 
 // SubmitTask enqueues a new task and returns a channel that will receive its result.
-func (agent *Agent) SubmitTask(task handles.Task) <-chan handles.TaskResult {
+func (agent *Agent) SubmitTask(task *handles.Task) <-chan handles.TaskResult {
 	resultCh := make(chan handles.TaskResult, 1)
 
 	if inChain(task.ParentCtx, agent.name) {
@@ -105,7 +101,7 @@ func (agent *Agent) SubmitTask(task handles.Task) <-chan handles.TaskResult {
 		resultCh <- handles.TaskResult{Err: errors.New("agent is stopped")}
 		return resultCh
 	}
-	agent.queue = append(agent.queue, &task)
+	agent.queue = append(agent.queue, task)
 	agent.mutex.Unlock()
 
 	// wake up the worker; non-blocking, since the worker drains the whole queue once woken

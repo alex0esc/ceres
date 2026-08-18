@@ -111,7 +111,8 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	if err != nil {
 		log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 	}
-	resultCh := agent.SubmitTask(handles.TaskAsk(m.Content, timeout))
+	task := handles.TaskAsk(m.Content, timeout)
+	resultCh := agent.SubmitTask(&task)
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {

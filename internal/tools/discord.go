@@ -101,7 +101,7 @@ func (t *DiscordTool) discordDM(message string) (string, error) {
 		return "", fmt.Errorf("discord_dm: message must not be empty")
 	}
 
-	userID := config.ReadEntry(platform.GetPlatformConfig(), "discord.user_id", "")
+	userID := config.ReadEntry(platform.GetPlatformConfig(), "discord.user_id", "<id>")
 	if userID == "" {
 		return "", fmt.Errorf("discord_dm: user_id is not configured under 'discord.user_id'")
 	}
@@ -168,7 +168,7 @@ func (t *DiscordTool) discordPost(channel, message string) (string, error) {
 	}
 
 	if err := SendChunked(t.session, target.ID, message); err != nil {
-		return "", fmt.Errorf("discord_dm: failed to send direct message: %w", err)
+		return "", fmt.Errorf("discord_post: failed to send direct message: %w", err)
 	}	
 
 	out, err := json.Marshal(map[string]any{"channel_id": target.ID})

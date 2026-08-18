@@ -1,10 +1,5 @@
 package handles
 
-import (
-	"context"
-	"time"
-)
-
 
 type AgentState int
 
@@ -27,55 +22,15 @@ func (s AgentState) String() string {
 	}
 }
 
-
-// type of task that should be done
-type TaskType int
-
-const(
-	TaskTypeAsk	= iota
-	TaskTypeClear
-	TaskTypeClearAsk
-	TaskTypeCompress
-)
-
-
-// task represents a single queued unit of work
-type Task struct {
-	ParentCtx    context.Context
-	Timeout      time.Duration
-	Prompt       string
-	Tasktype     TaskType
-	ResultCh     chan TaskResult
-	CheckList    map[string]bool
+//result returned by submitTask
+type TaskResult struct {
+	Response string
+	Err      error
 }
 
-func (t *Task) CheckRemaining() []string {
-	remaining := make([]string, 0, len(t.CheckList))
-	for name, done := range t.CheckList {
-		if !done {
-			remaining = append(remaining, name)
-		}
-	}
-	return remaining
+type ClientHandle interface {
+	AppendImage(base64Image string, mimeType string, promt string)
 }
-
-
-func TaskAsk(promt string, timeout time.Duration) Task {
-	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
-}
-
-func TaskClearAsk(promt string, timeout time.Duration) Task {
-	return Task{Prompt: promt, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClearAsk}
-}
-
-func TaskClear(timeout time.Duration) Task {
-	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClear}
-}
-
-func TaskCompression(timeout time.Duration) Task {
-	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeCompress}
-}
-
 
 
 // AgentHandle describes everything a tool needs to know about an agent.
@@ -83,19 +38,7 @@ type AgentHandle interface {
 	Name() string
 	Description() string
 	State() AgentState
-	SubmitTask(task Task) <-chan TaskResult
-	CheckListSet(checkList map[string]bool)
-	CheckListPop(name string) error
+	SubmitTask(task *Task) <-chan TaskResult
 	ClientHandle() ClientHandle
-}
-
-//result returned by submitTask
-type TaskResult struct {
-	Response string
-	Err      error
-}
-
-
-type ClientHandle interface {
-	AppendImage(base64Image string, mimeType string, promt string)
+	CurrentTask() *Task 
 }
