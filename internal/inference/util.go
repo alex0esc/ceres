@@ -225,7 +225,7 @@ func (client *Client) GetHistory() *history.History {
 				if imageBase64Size > 0 {
 					hist.Add(history.NewEntry(
 						history.EntryTypeUser,
-						fmt.Sprintf("[Image Appended - %.2f MB Base64]", float64(imageBase64Size)/(1024)),
+						fmt.Sprintf("[Image Appended - %.2f KB Base64]", float64(imageBase64Size)/(1024)),
 					))
 				}
 
