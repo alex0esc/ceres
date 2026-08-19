@@ -21,13 +21,21 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// zusätzlich noch einen eigenen Zeilenumbruch einfügt.
 	if km, ok := msg.(tea.KeyMsg); ok && tui.focus == focusInput {
 		switch km.String() {
-		case "enter", "alt+enter":
+		case "enter":
 			cmd := tui.handleKeyMsg(km)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 			return tui, tea.Batch(cmds...)
-		}
+		
+		case "down":
+			if tui.textarea.Line() == tui.textarea.LineCount()-1 {
+				tui.textarea.CursorEnd()
+				tui.textarea.InsertString("\n")
+				return tui, tea.Batch(cmds...)
+			}
+		}	
+
 	}
 
 	cmd := tui.updateFocusedComponent(msg)
@@ -62,10 +70,6 @@ func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return tea.Quit
 	case "tab":
 		tui.toggleFocus()
-	case "alt+enter":
-		if tui.focus == focusInput {
-			tui.textarea.InsertString("\n")
-		}
 	case "enter":
 		tui.handleEnter()
 	}
