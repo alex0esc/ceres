@@ -67,6 +67,7 @@ func waitForToken(sub chan TokenMsg) tea.Cmd {
 func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "ctrl+c":
+		tui.selectedAgent.Client.ClearOnEvent()
 		return tea.Quit
 	case "tab":
 		tui.toggleFocus()
@@ -122,7 +123,7 @@ func (tui *Tui) submitMessage() {
 			go func() {
 				err := (<-res).Err
 				if err != nil {
-					log.Printf("error while submitting message in the cli: %v", err)
+					log.Printf("error while submitting message from the cli: %v", err)
 				}
 			}()
 		} else {
