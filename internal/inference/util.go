@@ -15,7 +15,10 @@ import (
 
 // RegisterTool adds a callable tool to the client.
 func (client *Client) RegisterTool(t tool.Tool) {
-	client.Tools[t.Name()] = t
+	client.tools[t.Name()] = t
+	tp := responses.ToolParamOfFunction(t.Name(), t.Parameters(), true) // strict mode
+	tp.OfFunction.Description = openai.String(t.Description())
+	client.toolParams = append(client.toolParams, tp)
 }
 
 // resets the chat history of the client
@@ -34,7 +37,6 @@ func (client *Client) Interrupt() {
         client.cancelActiveRun = nil 
     }
 }
-
 
 
 type TokenType int
@@ -97,20 +99,6 @@ func (client *Client) appendAssistentMessage(promt string) {
 	client.chatHistory = append(client.chatHistory, msg)
 }
 
-
-// builds the tool list for the request payload from client.Tools
-func (client *Client) toolParams() []responses.ToolUnionParam {
-	if len(client.Tools) == 0 {
-		return nil
-	}
-	params := make([]responses.ToolUnionParam, 0, len(client.Tools))
-	for _, t := range client.Tools {
-		tp := responses.ToolParamOfFunction(t.Name(), t.Parameters(), true) // strict mode
-		tp.OfFunction.Description = openai.String(t.Description())
-		params = append(params, tp)
-	}
-	return params
-}
 
 // returns request opts for ask stream and compress
 func (c *Client) requestOpts() []option.RequestOption {

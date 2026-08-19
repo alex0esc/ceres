@@ -21,7 +21,8 @@ type Client struct {
 	ReasoningEffort openai.ReasoningEffort
 	SystemPrompt    string
 	chatHistory     []responses.ResponseInputItemUnionParam
-	Tools           map[string]tool.Tool
+	tools           map[string]tool.Tool
+	toolParams      []responses.ToolUnionParam
 
 	// prevents endless tool-call loops if the model gets "stuck"
 	MaxToolIterations int
@@ -53,6 +54,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		CompressionThreshold: 200000,
 		CompressionPromt: "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
 		NumMessagesToKeep: 8,
+		tools: make(map[string]tool.Tool),
 	}
 }
 
@@ -112,7 +114,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				responses.ResponseInputItemParamOfFunctionCall(v.Arguments, v.CallID, v.Name),
 			)
 
-			tool, ok := client.Tools[v.Name]
+			tool, ok := client.tools[v.Name]
 
 			// fires as soon as a new output item starts; used here to
 			call_text := fmt.Sprintf("Calling tool [%s] with arguments %s...", v.Name, v.Arguments)
@@ -185,7 +187,7 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 			Reasoning: responses.ReasoningParam{
 				Effort: client.ReasoningEffort,
 			},
-			Tools: client.toolParams(),
+			Tools: client.toolParams,
 		},
 		client.requestOpts()...
 		)

@@ -61,7 +61,6 @@ func LoadAgentFromFile(path string, endpoints map[string]inference.Endpoint) ([]
 		// ensure <name> works for all quantities
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
 		client.ReasoningEffort = responses.ReasoningEffort(cfg.ReasoningEffort)
-		client.Tools = make(map[string]tool.Tool)
 		client.MaxToolIterations = cfg.MaxToolIterations
 		client.NumMessagesToKeep = cfg.NumMessagesToKeep
 		client.CompressionThreshold = cfg.CompressionThreshold
