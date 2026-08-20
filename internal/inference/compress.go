@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 )
-
 
 // CompressHistory compresses older messages in chatHistory when total token count exceeds limits.
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
@@ -28,9 +28,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 			client.mutex.Unlock()
 		}()		
 	}
-
-	cmp_msg := fmt.Sprintf("Compressing current chat history {MessagesToKeep: %v}...", client.NumMessagesToKeep)
-	client.onEvent(NewToken(TokenTypeSystemInfo, cmp_msg))
 
 	client.mutex.Unlock()
 
@@ -109,5 +106,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	client.chatHistory = newHistory
 	client.TotalTokens = resp.Usage.TotalTokens
 	client.mutex.Unlock()
+	client.triggerOnEvent(history.Token{ Type: history.TokenTypeSystem, Content: []string{ summaryBuilder.String() } })
 	return nil
 }

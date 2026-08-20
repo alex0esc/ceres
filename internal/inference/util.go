@@ -2,8 +2,6 @@ package inference
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -11,7 +9,6 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/responses"
 )
-
 
 // RegisterTool adds a callable tool to the client.
 func (client *Client) RegisterTool(t tool.Tool) {
@@ -39,45 +36,42 @@ func (client *Client) Interrupt() {
 }
 
 
-type TokenType int
-
-const (
-	TokenTypeUser = iota
-	TokenTypeAssistent
-	TokenTypeReasoning
-	TokenTypeSystemInfo
-	TokenEndOfSequence
-)
-
-type Token struct {
-	Type TokenType
-	Content string
-}
-
-func NewToken(tp TokenType, content string) Token {
-	return Token{ Type: tp, Content: content }
-}
-
-
-// SetOnEvent tauscht den Event-Callback thread-sicher aus.
-func (client *Client) SetOnEvent(fn func(Token)) {
+// managing the event callback
+func (client *Client) SetOnEvent(fn func(history.Token)) {
     client.mutex.Lock()
     defer client.mutex.Unlock()
     client.onEvent = fn
 }
 
 
-// triggerOnEvent liest den Callback geschützt aus und führt ihn aus, falls gesetzt.
-func (client *Client) triggerOnEvent(token Token) {
-    client.mutex.Lock()
-    fn := client.onEvent
-    client.mutex.Unlock()
-    if fn != nil {
-        fn(token)
-    }
+// streams the tokens currently in the pipeline instantly
+func (client *Client) CatchUpOnEvent() {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if client.onEvent == nil {
+		return
+	}
+	tokens := make([]history.Token, len(client.partialAnswer))
+	copy(tokens, client.partialAnswer)
+	onEvent := client.onEvent
+
+	go func() {
+		for _, token := range tokens {
+			onEvent(token)
+		}
+	}()
 }
 
-// ClearOnEvent entfernt den aktuell registrierten Event-Callback thread-sicher.
+
+func (client *Client) triggerOnEvent(token history.Token) {
+    client.mutex.Lock()
+    defer client.mutex.Unlock()
+    if client.onEvent == nil {
+    	return
+    }
+	client.onEvent(token)
+}
+
 func (client *Client) ClearOnEvent() {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
@@ -85,11 +79,13 @@ func (client *Client) ClearOnEvent() {
 }
 
 
-
-func (client *Client) appendUserMessage(promt string) {
-	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleUser,)
+// apppending messages to history
+func (client *Client) appendUserMessage(prompt string) {
+	msg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)	
+	client.triggerOnEvent(history.Token {Type: history.TokenTypeUser, Content: []string{ prompt }})
+	client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
 }
 
 
@@ -97,16 +93,6 @@ func (client *Client) appendAssistentMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)
-}
-
-
-// returns request opts for ask stream and compress
-func (c *Client) requestOpts() []option.RequestOption {
-	opts := make([]option.RequestOption, 0, len(c.ExtraBody))
-	for k, v := range c.ExtraBody {
-		opts = append(opts, option.WithJSONSet(k, v))
-	}
-	return opts
 }
 
 
@@ -121,6 +107,8 @@ func (client *Client) AppendImage(base64Image string, mimeType string, prompt st
 
 	if prompt != "" {
 		content = append(content, responses.ResponseInputContentParamOfInputText(prompt))
+		client.triggerOnEvent(history.Token {Type: history.TokenTypeUser, Content: []string{ prompt }})
+		client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
 	}
 
 	content = append(content, responses.ResponseInputContentUnionParam{
@@ -133,101 +121,16 @@ func (client *Client) AppendImage(base64Image string, mimeType string, prompt st
 	msg := responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRoleUser)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)
-	client.triggerOnEvent(NewToken(TokenTypeUser, fmt.Sprintf("[Image Appended - %.2f KB Base64]", float64(len(base64Image))/(1024))))
-	client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
+	client.triggerOnEvent(history.Token {Type: history.TokenTypeImage, Content: []string{ dataURL }})
 }
 
 
-
-
-//extracts the history of the client and formats it correctly
-var thinkTagRegex = regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-
-// extractReasoning trennt <think>...</think> Blöcke vom eigentlichen Text.
-func extractReasoning(rawContent string) (reasoningText string, cleanText string) {
-	matches := thinkTagRegex.FindStringSubmatch(rawContent)
-	if len(matches) > 1 {
-		reasoningText = strings.TrimSpace(matches[1])
-		cleanText = strings.TrimSpace(thinkTagRegex.ReplaceAllString(rawContent, ""))
-		return reasoningText, cleanText
+// returns request opts for ask stream and compress
+func (client *Client) requestOpts() []option.RequestOption {
+	opts := make([]option.RequestOption, 0, len(client.ExtraBody))
+	for k, v := range client.ExtraBody {
+		opts = append(opts, option.WithJSONSet(k, v))
 	}
-
-	return "", strings.TrimSpace(rawContent)
+	return opts
 }
 
-
-// removes any base64 strings of images from the message,
-// but keeps the total base64 size in bytes
-func extractMessageContent(content responses.EasyInputMessageContentUnionParam) (text string, imageBase64Size int) {
-	if s := content.OfString.String(); s != "" {
-		return s, 0
-	}
-
-	var parts []string
-	for _, part := range content.OfInputItemContentList {
-		switch {
-		case part.OfInputText != nil:
-			parts = append(parts, part.OfInputText.Text)
-
-		case part.OfInputImage != nil:
-			image := part.OfInputImage
-			data := image.ImageURL.String()
-
-			// Remove "data:image/...;base64," prefix if present
-			if idx := strings.Index(data, "base64,"); idx >= 0 {
-				data = data[idx+len("base64,"):]
-			}
-
-			imageBase64Size += len(data)
-		}
-	}
-
-	return strings.Join(parts, "\n"), imageBase64Size
-}
-
-func (client *Client) GetHistory() *history.History {
-	var hist history.History
-
-	for _, item := range client.chatHistory {
-		switch {
-		case item.OfMessage != nil:
-			content, imageBase64Size := extractMessageContent(item.OfMessage.Content)
-
-			switch item.OfMessage.Role {
-			case responses.EasyInputMessageRoleAssistant:
-				reasoning, text := extractReasoning(content)
-
-				if reasoning != "" {
-					hist.Add(history.NewEntry(history.EntryTypeReasoning, reasoning))
-				}
-
-				if text != "" {
-					hist.Add(history.NewEntry(history.EntryTypeAssistent, text))
-				}
-
-			case responses.EasyInputMessageRoleUser:
-				if content != "" {
-					hist.Add(history.NewEntry(history.EntryTypeUser, content))
-				}
-
-				if imageBase64Size > 0 {
-					hist.Add(history.NewEntry(
-						history.EntryTypeUser,
-						fmt.Sprintf("[Image Appended - %.2f KB Base64]", float64(imageBase64Size)/(1024)),
-					))
-				}
-
-			case responses.EasyInputMessageRoleSystem:
-				hist.Add(history.NewEntry(history.EntryTypeSystemInfo, content))
-			}
-
-		case item.OfFunctionCall != nil:
-			fc := item.OfFunctionCall
-			hist.Add(history.NewEntry(
-				history.EntryTypeSystemInfo,
-				fmt.Sprintf("Calling tool [%s] with arguments %s...\n\n", fc.Name, fc.Arguments),
-			))
-		}
-	}
-	return &hist
-}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
@@ -18,26 +19,31 @@ type Client struct {
 	endpoint        *Endpoint
 	modelName       string
 	ExtraBody       map[string]any
+
+	// other
 	ReasoningEffort openai.ReasoningEffort
 	SystemPrompt    string
+
+	// history
 	chatHistory     []responses.ResponseInputItemUnionParam
+	partialAnswer   []history.Token
+    onEvent func(history.Token)
+	
+
+	// tools
 	tools           map[string]tool.Tool
 	toolParams      []responses.ToolUnionParam
-
-	// prevents endless tool-call loops if the model gets "stuck"
 	MaxToolIterations int
 
-	// Thread-sichere Verwaltung des aktiven Contexts für Interrupts
+	// sync
     mutex           sync.Mutex
     cancelActiveRun context.CancelFunc
 
-    //dynamically changeable onEvent function
-    onEvent func(Token)
 
-    //usage
+    // usage
     TotalTokens int64
 
-    //compression
+    // compression
     CompressionThreshold int64
 	NumMessagesToKeep int
     CompressionPromt string
@@ -64,7 +70,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 // function-call items are executed and their call+result appended.
 // Returns the concatenated assistant text found in this output, whether
 // any tool calls were found, and an error if one occurred.
-func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion, handle handles.AgentHandle, tempAnswer *strings.Builder) (bool, error) {
+func (client *Client) handleToolCalls(ctx context.Context, output []responses.ResponseOutputItemUnion, handle handles.AgentHandle, fullAnswer *history.History) bool {
 	foundCall := false
 
 
@@ -74,29 +80,33 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 
 		//put reasoning in the chat history for the bot to have more context
 		case responses.ResponseReasoningItem:    		
-			summary := ""
+			var summary strings.Builder
 			for _, part := range v.Content {
-				summary += part.Text
+				summary.WriteString(part.Text)
 			}
-			if summary == "" {
-				for _, part := range v.Summary {
-					summary += part.Text
-				}
+			for _, part := range v.Summary {
+				summary.WriteString(part.Text)
 			}
-			if summary != "" {
+
+			if summary.String() != "" {
+				fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ summary.String() }})
 				message.WriteString("<think>\n")
-				message.WriteString(summary)
+				message.WriteString(summary.String())
 				message.WriteString("\n</think>\n\n")
 			}
 
 			
 		case responses.ResponseOutputMessage:
+			var complete strings.Builder
 			for _, part := range v.Content {
 				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
-					message.WriteString(t.Text)
+					complete.WriteString(t.Text)
 				}
 			}
-
+			if len(complete.String()) > 0 {
+				fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistent, Content: []string{ complete.String() }})
+				message.WriteString(complete.String())
+			}
 			if message.Len() > 0 {
 				client.appendAssistentMessage(message.String())
 				message.Reset()
@@ -114,13 +124,14 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				responses.ResponseInputItemParamOfFunctionCall(v.Arguments, v.CallID, v.Name),
 			)
 
+			// fires as soon as a new output item starts; used here to
+			fullAnswer.Push(history.Entry{ Type: history.EntryTypeToolCall, Content: []string{ v.Name, v.Arguments }})
+			client.triggerOnEvent(history.Token {Type: history.TokenTypeToolCall, Content: []string{ v.Name, v.Arguments }})
+			client.triggerOnEvent(history.Token {Type: history.TokenEndOfSequence })
+
 			tool, ok := client.tools[v.Name]
 
-			// fires as soon as a new output item starts; used here to
-			call_text := fmt.Sprintf("Calling tool [%s] with arguments %s...", v.Name, v.Arguments)
-			tempAnswer.WriteString(call_text);
-			client.triggerOnEvent(NewToken(TokenTypeSystemInfo, call_text))
-			client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
+			
 
 			var result string
 			if !ok {
@@ -137,13 +148,19 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			client.chatHistory = append(client.chatHistory,
 				responses.ResponseInputItemParamOfFunctionCallOutput(v.CallID, result),
 			)
+
+			// fires as soon as a tool call is finished
+			fullAnswer.Push(history.Entry{ Type: history.EntryTypeToolResult, Content: []string{ result }})
+			client.triggerOnEvent(history.Token {Type: history.TokenTypeToolResult, Content: []string{ result }})
+			client.triggerOnEvent(history.Token {Type: history.TokenEndOfSequence })
+
 		}
 	}
 	if message.Len() > 0 {
 		client.appendAssistentMessage(message.String())
 		message.Reset()
 	}
-	return foundCall, nil
+	return foundCall
 }
 
 
@@ -151,7 +168,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, userPrompt string, handle handles.AgentHandle) (string, error) {
+func (client *Client) AskStream(ctx context.Context, userPrompt string, handle handles.AgentHandle) (*history.History, error) {
 	client.appendUserMessage(userPrompt)
 
 	//allow cancable context with thread safety
@@ -172,7 +189,8 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 	// tool names we've already announced as "started" in the current round,
 	// keyed by output index, so we don't emit StreamEventToolCallStarted twice
 	// for the same item if the SDK emits multiple related events for it
-	var fullAnswer strings.Builder
+	var fullAnswer history.History
+	defer func() { client.partialAnswer = nil }()
 	for i := 0; i < client.MaxToolIterations; i++ {
 		if client.TotalTokens > client.CompressionThreshold {
 			client.CompressHistory(runCtx)
@@ -192,30 +210,29 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 		client.requestOpts()...
 		)
 
-		var tempAnswer strings.Builder
+
+		client.partialAnswer = nil
 		var finalOutput []responses.ResponseOutputItemUnion
 		for stream.Next() {
 			event := stream.Current()
 			switch e := event.AsAny().(type) {
 			case responses.ResponseReasoningTextDeltaEvent, responses.ResponseReasoningSummaryTextDeltaEvent:
-				client.triggerOnEvent(NewToken(TokenTypeReasoning, event.Delta))				
+				token := history.Token {Type: history.TokenTypeReasoning, Content: []string { event.Delta } }
+				client.partialAnswer = append(client.partialAnswer, token)
+				client.triggerOnEvent(token)				
 
 			case responses.ResponseTextDeltaEvent:
-				client.triggerOnEvent(NewToken(TokenTypeAssistent, e.Delta))
-				tempAnswer.WriteString(e.Delta)
+				token := history.Token {Type: history.TokenTypeAssistent, Content: []string { event.Delta } }
+				client.partialAnswer = append(client.partialAnswer, token)
+				client.triggerOnEvent(token)				
 
 			case responses.ResponseOutputItemAddedEvent: 
 				if _, ok := e.Item.AsAny().(responses.ResponseReasoningItem); ok || e.Item.Type == "reasoningmessage" {
 					continue
 				}
-
-				if _, ok := e.Item.AsAny().(responses.ResponseFunctionToolCall); ok {
-					client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
-					continue
-				}
-				//mark the end of the current msg generation
-				client.triggerOnEvent(NewToken(TokenEndOfSequence, ""))
-				tempAnswer.WriteString("\n\n")
+				token := history.Token { Type: history.TokenEndOfSequence }
+				client.partialAnswer = append(client.partialAnswer, token)
+				client.triggerOnEvent(token)
 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls
@@ -224,27 +241,36 @@ func (client *Client) AskStream(ctx context.Context, userPrompt string, handle h
 			}
 		}
 
+		client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
+
 		if errors.Is(stream.Err(), context.Canceled) {
-			client.appendAssistentMessage(tempAnswer.String())
-			fullAnswer.WriteString(tempAnswer.String())
-			return fullAnswer.String(), nil
+			var reason strings.Builder
+			var normal strings.Builder
+			for _, token := range client.partialAnswer {
+				switch token.Type {
+				case history.TokenTypeReasoning:
+					reason.WriteString(token.Content[0])
+				case history.TokenTypeAssistent:
+					normal.WriteString(token.Content[0])
+				}
+			}
+			if reason.Len() > 0 {
+				client.appendAssistentMessage("<think>\n" + reason.String() + "\n</think>\n\n" + normal.String())
+			} else if normal.Len() > 0 {
+				client.appendAssistentMessage(normal.String())
+			}
+			return &fullAnswer, nil
 		}
+
 		
 		if err := stream.Err(); err != nil {
-			return "", err
+			return nil, err
 		}
 
-		hadToolCalls, err := client.handleToolCalls(runCtx, finalOutput, handle, &tempAnswer)
-		if err != nil {
-			return "", fmt.Errorf("Error handling tool calls: %w", err)
-		}
-
-		fullAnswer.WriteString(tempAnswer.String())
-
-		if !hadToolCalls {
-			return fullAnswer.String(), nil
+		if !client.handleToolCalls(runCtx, finalOutput, handle, &fullAnswer) {
+			return &fullAnswer, nil
 		}
 	}
 
-	return "", fmt.Errorf("max tool iterations (%d) exceeded", client.MaxToolIterations)
+	return nil, fmt.Errorf("max tool iterations (%d) exceeded", client.MaxToolIterations)
 }

@@ -28,7 +28,7 @@ func (t *SubagentTool) Description() string {
 		"(use this first, before calling any subagents). " +
 		"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel and wait until all " +
 		"of them have finished. A subagent does not remember what it did before, so the full context must be " +
-		"provided in each task. A busy subagent is still callable, but its task may be queued and take longer."
+		"provided in each task. A busy subagent is still callable, but its task may be queued and takes longer."
 }
 
 func (t *SubagentTool) Parameters() map[string]any {
@@ -173,7 +173,12 @@ func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string,
 			fmt.Fprintf(&sb, "error: %v\n\n", result.Err)
 			continue
 		}
-		fmt.Fprintf(&sb, "%s\n\n", result.Response)
+		last := result.Response.LastEntry() 
+		if last == nil {
+			fmt.Fprintf(&sb, "Agent returned an empty result!")
+		} else {
+			fmt.Fprintf(&sb, "%s\n\n", last.String())
+		}
 	}
 	return sb.String(), nil
 }

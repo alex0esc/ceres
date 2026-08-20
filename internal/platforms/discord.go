@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/tools"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -118,7 +119,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	if result.Err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
 	} else {
-		tools.SendChunked(s, m.ChannelID, result.Response)
+		tools.SendChunked(s, m.ChannelID, result.Response.Filter(history.EntryTypeAssistent, history.EntryTypeToolCall).String())
 	}
 
 }

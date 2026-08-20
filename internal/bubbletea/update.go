@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/alex0esc/ceres/internal/inference"
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -50,17 +50,11 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		tui.handleWindowSizeMsg(msg)
-	case TokenMsg:
-		cmds = append(cmds, waitForToken(tui.inputChan))
+	case history.Token:
 		tui.handleTokenMsg(msg)
+		cmds = append(cmds, tui.waitForToken())
 	}
 	return tui, tea.Batch(cmds...)
-}
-
-func waitForToken(sub chan TokenMsg) tea.Cmd {
-	return func() tea.Msg {
-		return <-sub
-	}
 }
 
 // to handle global key presses
@@ -110,10 +104,8 @@ func (tui *Tui) submitMessage() {
 	agnt := tui.selectedAgent
 	if agnt != nil {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
-		tui.mergeTokens()
 		if !cmd {
 			tui.selectedAgent.Client.Interrupt()
-			tui.appendUserMessage(input)
 			timeout, err := time.ParseDuration(config.ReadEntry(tui.server.GetConfig(), "tui.message_timeout", "60m"))
 			if err != nil {
 				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
@@ -150,8 +142,8 @@ func (tui *Tui) applyListSelection() {
 		tui.selectedAgent = tui.server.GetAgent(selected.botName)
 		tui.loadAgentHistory()
 		tui.viewport.SetContent(tui.getContentString())
-		tui.selectedAgent.Client.SetOnEvent(func(token inference.Token) {
-			tui.inputChan <- TokenMsg(token)
+		tui.selectedAgent.Client.SetOnEvent(func(token history.Token) {
+			tui.inputChan <- token
 		})
 	}
 }
@@ -185,9 +177,9 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 }
 
 // handleChunkMsg adds a msg to the current chat
-func (tui *Tui) handleTokenMsg(token TokenMsg) {
+func (tui *Tui) handleTokenMsg(token history.Token) {
 	switch token.Type {
-	case inference.TokenEndOfSequence:
+	case history.TokenEndOfSequence:
 		tui.mergeTokens()
 	default:
 		tui.tokens = append(tui.tokens, token)
@@ -195,6 +187,41 @@ func (tui *Tui) handleTokenMsg(token TokenMsg) {
 	tui.viewport.SetContent(tui.getContentString())
 	tui.viewport.GotoBottom()
 }
+
+
+
+
+func (tui *Tui) waitForToken() tea.Cmd {
+	return func() tea.Msg {
+		var first history.Token		
+		if tui.pendingToken != nil {
+			first = *tui.pendingToken
+			tui.pendingToken = nil
+		} else {
+			first = (<-tui.inputChan).Copy()
+		}
+		
+		if first.Type != history.TokenTypeReasoning &&
+			first.Type != history.TokenTypeAssistent {
+			return first
+		}
+		
+		for {
+			select {
+			case token := <-tui.inputChan:
+				if token.Type == first.Type {
+					first.Content[0] += token.Content[0]
+				} else {
+					tui.pendingToken = &token
+					return first
+				}
+			default:
+				return first
+			}
+		}
+	}
+}
+
 
 // updates the focused components based on their librarie
 func (tui *Tui) updateFocusedComponent(msg tea.Msg) tea.Cmd {

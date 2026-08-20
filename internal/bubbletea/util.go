@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
@@ -78,20 +77,28 @@ func (tui *Tui) loadAgentHistory() {
 	}
 	tui.messages = nil
 	tui.tokens = nil
+	tui.pendingToken = nil
+	for { select {
+	case <-tui.inputChan:
+	default:
+		goto Done
+	}}
+	Done:
+
 	histroy := tui.selectedAgent.Client.GetHistory()
 	for entry := range histroy.All() {
 		switch entry.Type {
 		case history.EntryTypeAssistent:			
-			tui.appendAgentMessage(entry.Content)
+			tui.appendAgentMessage(entry.String())
 		case history.EntryTypeUser:
-			tui.appendUserMessage(entry.Content)
-		case history.EntryTypeSystemInfo:
-			tui.appendSystemMessage(entry.Content)
+			tui.appendUserMessage(entry.String())
+		case history.EntryTypeSystem, history.EntryTypeToolCall:
+			tui.appendSystemMessage(entry.String())
 		case history.EntryTypeReasoning:
-			tui.appendReasoningMessage(entry.Content)
+			tui.appendReasoningMessage(entry.String())
 		}
-		
 	}
+	tui.selectedAgent.Client.CatchUpOnEvent()
 }
 
 func (tui *Tui) getContentString() string {
@@ -107,15 +114,15 @@ func (tui *Tui) getContentString() string {
 	if len(tui.tokens) > 0 {
 		var tokenText strings.Builder
 		for _, token := range tui.tokens {
-			tokenText.WriteString(token.Content)
+			tokenText.WriteString(token.String())
 		}
 			
 		var rendered string
 		var err error = nil
 		switch tui.tokens[0].Type {
-		case inference.TokenTypeSystemInfo:
+		case history.TokenTypeSystem, history.EntryTypeToolCall:
 			rendered = tui.renderSystem(tokenText.String())
-		case inference.TokenTypeReasoning:
+		case history.TokenTypeReasoning:
 			rendered = tui.renderReasoning(tokenText.String())
 		default:
 			rendered, err = tui.rendererAgent.Render(tokenText.String())
@@ -136,16 +143,16 @@ func (tui *Tui) mergeTokens() {
 	}
 	var text strings.Builder
 	for _, token := range tui.tokens {
-		text.WriteString(token.Content)
+		text.WriteString(token.String())
 	}
 	switch tui.tokens[0].Type {
-	case inference.TokenTypeAssistent, inference.TokenEndOfSequence: 
+	case history.TokenTypeAssistent, history.TokenEndOfSequence: 
 		tui.appendAgentMessage(text.String())
-	case inference.TokenTypeUser: 
+	case history.TokenTypeUser: 
 		tui.appendUserMessage(text.String())
-	case inference.TokenTypeSystemInfo:
+	case history.TokenTypeSystem, history.TokenTypeToolCall:
 		tui.appendSystemMessage(text.String())
-	case inference.TokenTypeReasoning:
+	case history.TokenTypeReasoning:
 		tui.appendReasoningMessage(text.String())
 	}
 	tui.tokens = nil

@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/alex0esc/ceres/internal/agent"
-	"github.com/alex0esc/ceres/internal/inference"
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -13,8 +13,6 @@ import (
 	"github.com/charmbracelet/glamour"
 )
 
-// used to send messages to tui
-type TokenMsg inference.Token
 
 // focused componen saved as number
 type focusState int
@@ -41,9 +39,10 @@ type Tui struct {
 
 	//current text
 	messages []string
-	tokens []TokenMsg
+	tokens   []history.Token
 
-	inputChan chan TokenMsg
+	inputChan chan history.Token
+	pendingToken  *history.Token
 }
 
 

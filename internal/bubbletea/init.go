@@ -2,6 +2,7 @@ package bubbletea
 
 import (
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -94,14 +95,14 @@ func initialTui(server *server.Server) *Tui {
 		list:      newList(server.GetAgentList()),
 		focus:     focusInput,
 		server:    server,
-		inputChan: make(chan TokenMsg, 10),
+		inputChan: make(chan history.Token, 128),
 		selectedAgent: nil,
 	}
 }
 
 func (tui *Tui) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	cmds = append(cmds, waitForToken(tui.inputChan))
+	cmds = append(cmds, tui.waitForToken())
 	cmds = append(cmds, textinput.Blink)
 	return tea.Batch(cmds...)
 }

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
@@ -42,21 +43,21 @@ func (agent *Agent) worker() {
 			switch t.Tasktype {
 			case handles.TaskTypeCompress:
 				err := agent.Client.CompressHistory(runCtx)
-				t.ResultCh <- handles.TaskResult{Response: "", Err: err}
+				t.ResultCh <- handles.TaskResult{Response: nil, Err: err}
 			case handles.TaskTypeClear:
 				agent.Client.ClearHistory()
-				t.ResultCh <- handles.TaskResult{Response: "", Err: nil}
+				t.ResultCh <- handles.TaskResult{Response: nil, Err: nil}
 			case handles.TaskTypeAsk:
-				var fullResp strings.Builder
+				var fullResp *history.History = &history.History{}
 				resp, err := agent.Client.AskStream(runCtx, t.Prompt, agent)
 				if err != nil {
 					t.ResultCh <- handles.TaskResult{Response: resp, Err: err}
 					goto Done
 				}
-				fullResp.WriteString(resp)
+				fullResp.Append(resp)
 				for {
 					if err = runCtx.Err(); err != nil {
-						t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
+						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
 						goto Done
 					}
 					remaining := t.CheckRemaining()
@@ -66,11 +67,11 @@ func (agent *Agent) worker() {
 					resp, err = agent.Client.AskStream(runCtx,
 						fmt.Sprintf("[System]: Checklist is not finished, remaining tasks are: %s", quoteJoin(remaining)), agent)
 					if err != nil {
-						t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
+						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
 						goto Done
 					}
 				}
-				t.ResultCh <- handles.TaskResult{Response: fullResp.String(), Err: err}
+				t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
 			}
 
 			Done:

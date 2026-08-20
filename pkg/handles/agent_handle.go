@@ -1,5 +1,6 @@
 package handles
 
+import "github.com/alex0esc/ceres/internal/history"
 
 type AgentState int
 
@@ -22,16 +23,15 @@ func (s AgentState) String() string {
 	}
 }
 
-//result returned by submitTask
+// result returned by submitTask
 type TaskResult struct {
-	Response string
+	Response *history.History
 	Err      error
 }
 
 type ClientHandle interface {
 	AppendImage(base64Image string, mimeType string, promt string)
 }
-
 
 // AgentHandle describes everything a tool needs to know about an agent.
 type AgentHandle interface {
@@ -40,5 +40,5 @@ type AgentHandle interface {
 	State() AgentState
 	SubmitTask(task *Task) <-chan TaskResult
 	ClientHandle() ClientHandle
-	CurrentTask() *Task 
+	CurrentTask() *Task
 }
