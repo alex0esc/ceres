@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -28,7 +29,8 @@ func (t *SubagentTool) Description() string {
 		"(use this first, before calling any subagents). " +
 		"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel and wait until all " +
 		"of them have finished. A subagent does not remember what it did before, so the full context must be " +
-		"provided in each task. A busy subagent is still callable, but its task may be queued and takes longer."
+		"provided in each task. A busy subagent is still callable, but its task may be queued and takes longer." +
+		"You only see the most recent message block of the subagent so tell him to summerize at the end!"
 }
 
 func (t *SubagentTool) Parameters() map[string]any {
@@ -173,11 +175,11 @@ func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string,
 			fmt.Fprintf(&sb, "error: %v\n\n", result.Err)
 			continue
 		}
-		last := result.Response.LastEntry() 
-		if last == nil {
-			fmt.Fprintf(&sb, "Agent returned an empty result!")
+		filtered := result.Response.Filter(history.EntryTypeAssistent, history.EntryTypeToolCall)
+		if len(filtered.Entries) > 0 {
+			fmt.Fprintf(&sb, "%s\n\n", filtered.String())
 		} else {
-			fmt.Fprintf(&sb, "%s\n\n", last.String())
+			fmt.Fprintf(&sb, "Agent returned an empty result!")
 		}
 	}
 	return sb.String(), nil

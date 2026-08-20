@@ -1,28 +1,28 @@
 package history
 
 import (
-	"slices"
 	"iter"
+	"slices"
 	"strings"
 )
 
 type History struct {
-	entries []Entry
+	Entries []Entry
 }
 
 func (history *History) Push(entry Entry) {
-	history.entries = append(history.entries, entry)
+	history.Entries = append(history.Entries, entry)
 }
 
 func (history *History) Append(other *History) {
-	for _, entry := range other.entries {
-		history.entries = append(history.entries, entry)
+	for _, entry := range other.Entries {
+		history.Entries = append(history.Entries, entry)
 	}
 }
 
 func (history *History) All() iter.Seq[Entry] {
 	return func(yield func(Entry) bool) {
-		for _, entry := range history.entries {
+		for _, entry := range history.Entries {
 			if !yield(entry) {
 				return
 			}
@@ -32,7 +32,7 @@ func (history *History) All() iter.Seq[Entry] {
 
 func (history *History) String() string {
 	var builder strings.Builder
-	for _, entry := range history.entries {
+	for _, entry := range history.Entries {
 		if builder.Len() > 0 {
 			builder.WriteString("\n\n")
 		}
@@ -41,18 +41,11 @@ func (history *History) String() string {
 	return builder.String()
 }
 
-func (history *History) LastEntry() *Entry {
-	if len(history.entries) <= 0 {
-		return nil
-	}
-	return &history.entries[len(history.entries) - 1]
-}
-
 
 func (history *History) Filter(types ...EntryType) *History {
 	filtered := &History{}
 
-	for _, entry := range history.entries {
+	for _, entry := range history.Entries {
 		keep := slices.Contains(types, entry.Type)
 
 		if keep {
@@ -62,3 +55,4 @@ func (history *History) Filter(types ...EntryType) *History {
 
 	return filtered
 }
+
