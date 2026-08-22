@@ -18,7 +18,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ceres .
 FROM alpine:latest
 
 # IMPORTANT for OpenAI & Discord: Install SSL certificates and timezone data
-RUN apk --no-cache add ca-certificates tzdata ncurses-terminfo
+RUN apk --no-cache add ca-certificates tzdata ncurses-terminfo python3
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 

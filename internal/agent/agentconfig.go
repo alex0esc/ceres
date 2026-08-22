@@ -132,19 +132,19 @@ func EnsureOneAgentFile(dir string) error {
 
 	cfg := AgentConfig{
 		Name:                 "Ceres",
-		ModelName:            "ornith:35b",
+		ModelName:            "qwen3.8",
 		ExtraBody: nil,
 		Description:          "The main agent of the system.",
 		ReasoningEffort:      string(responses.ReasoningEffortMedium),
 		SystemPrompt:         "You are <name> a helpful AI assistant.",
 		Tools:                tool.Names(),
-		Endpoint:             "ollama",
+		Endpoint:             "llama",
 		Quantity:             1,
 		Subagent:             false,
 		MaxToolIterations:    30,
 		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
-		CompressionPromt:     "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
+		CompressionPromt:     "Your task is to summerize the current chat. Make it precise and dont leave out anything important.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)

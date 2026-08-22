@@ -30,7 +30,7 @@ func (t *SubagentTool) Description() string {
 		"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel and wait until all " +
 		"of them have finished. A subagent does not remember what it did before, so the full context must be " +
 		"provided in each task. A busy subagent is still callable, but its task may be queued and takes longer." +
-		"You only see the most recent message block of the subagent so tell him to summerize at the end!"
+		"Its also possible to submit multiple tasks at once to one subagent, all tasks will be queue and executed."
 }
 
 func (t *SubagentTool) Parameters() map[string]any {

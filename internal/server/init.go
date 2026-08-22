@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-
 	_ "github.com/alex0esc/ceres/internal/commands"
 	_ "github.com/alex0esc/ceres/internal/platforms"
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/inference"
@@ -29,6 +30,12 @@ func NewServer() (*Server, error) {
 		return nil, fmt.Errorf("error loading server config: %v", err)
 	}
 	tool.LoadToolConfig(ToolConfigPath)
+
+	err = tool.RegisterExternal()
+	if err != nil {
+		return nil, fmt.Errorf("error registering external tools: %v", err)
+	}
+
 	platform.LoadPlatformConfig(PlatformConfigPath)
 
 	// load endpoints configurations
@@ -54,7 +61,7 @@ func NewServer() (*Server, error) {
 func (server *Server) GetAgent(name string) *agent.Agent {
 	agnt, ok := server.agents[name]
 	if !ok {	
-		panic(fmt.Sprintf("unknown agent %s", name))
+		log.Fatalf("unknown agent %s", name)
 	}
 	return agnt
 }
@@ -71,7 +78,7 @@ func (server *Server) GetAgentList() []*agent.Agent {
 
 func (server *Server) GetConfig() *config.Config {
 	if server.config == nil {	
-		panic("server config is nil, initialize it first")
+		log.Fatal("server config is nil, initialize it first")
 	}
 	return server.config
 }
