@@ -65,7 +65,7 @@ func (agent *Agent) worker() {
 						break	
 					}
 					resp, err = agent.Client.AskStream(runCtx,
-						fmt.Sprintf("[System]: Checklist is not finished, remaining tasks are: %s", quoteJoin(remaining)), agent)
+						fmt.Sprintf("[System] Checklist is not finished, remaining tasks are: %s", quoteJoin(remaining)), agent)
 					if err != nil {
 						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
 						goto Done

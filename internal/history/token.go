@@ -7,7 +7,6 @@ type TokenType int
 const (
 	TokenTypeUser = iota
 	TokenTypeAssistent
-	TokenTypeSystem
 	TokenTypeReasoning
 	TokenTypeToolCall
 	TokenTypeToolResult
@@ -22,7 +21,7 @@ type Token struct {
 
 func (token *Token) String() string {
 	switch token.Type {
-	case TokenTypeAssistent, TokenTypeReasoning, TokenTypeSystem, TokenTypeUser:
+	case TokenTypeAssistent, TokenTypeReasoning, TokenTypeUser:
 		return token.Content[0]
 	case TokenTypeToolCall:
 		return fmt.Sprintf("Calling tool [%s] with arguments %s...", token.Content[0], token.Content[1])

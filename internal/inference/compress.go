@@ -51,10 +51,12 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	inputItems := make([]responses.ResponseInputItemUnionParam, 0, len(toCompress)+1)
 	inputItems = append(inputItems, toCompress...)
 
-	promptMsg := responses.ResponseInputItemParamOfMessage("[System]: " + prompt, responses.EasyInputMessageRoleUser)
+	prompt = "[System] " + prompt
+	promptMsg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
 	promptMsg.OfMessage.Type = "message"
-
 	inputItems = append(inputItems, promptMsg)
+	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ prompt } })
+	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })
 
 	// 2. Execute synchronous (non-streaming) API request WITHOUT tools
 	resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
@@ -73,7 +75,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 
 	// 3. Extract generated summary text from response output
 	var summaryBuilder strings.Builder
-	summaryBuilder.WriteString("[Summary of previous conversation]\n\n")
 	for _, item := range resp.Output {
 		if msg, ok := item.AsAny().(responses.ResponseOutputMessage); ok {
 			for _, part := range msg.Content {
@@ -84,18 +85,17 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 		}
 	}
 
-	if summaryBuilder.String() == "[Summary of previous conversation]\n\n" {
+	if summaryBuilder.String() == "" {
 		return fmt.Errorf("compression yielded an empty summary")
 	}
 
-	summaryBuilder.WriteString("\n\n[End of summary]")
 	
 
 	// 4. Rebuild chat history: [Summary turn] + [unmodified recent messages]
 	newHistory := make([]responses.ResponseInputItemUnionParam, 0, 1+len(toKeep))
 
-
-	summaryItem := responses.ResponseInputItemParamOfMessage(summaryBuilder.String(), responses.EasyInputMessageRoleSystem)
+	summaryStr := "[Summary of previous conversation]\n\n" + summaryBuilder.String() + "\n\n[End of summary]"
+	summaryItem := responses.ResponseInputItemParamOfMessage(summaryStr, responses.EasyInputMessageRoleUser)
 	summaryItem.OfMessage.Type = "message"
 
 	newHistory = append(newHistory, summaryItem)
@@ -106,6 +106,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	client.chatHistory = newHistory
 	client.TotalTokens = resp.Usage.TotalTokens
 	client.mutex.Unlock()
-	client.triggerOnEvent(history.Token{ Type: history.TokenTypeSystem, Content: []string{ summaryBuilder.String() } })
+	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ summaryStr } })
+	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })
 	return nil
 }

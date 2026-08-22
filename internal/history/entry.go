@@ -7,7 +7,6 @@ type EntryType int
 const (
 	EntryTypeUser = iota
 	EntryTypeAssistent
-	EntryTypeSystem
 	EntryTypeReasoning
 	EntryTypeToolCall
 	EntryTypeToolResult
@@ -21,7 +20,7 @@ type Entry struct {
 
 func (entry *Entry) String() string {
 	switch entry.Type {
-	case EntryTypeAssistent, EntryTypeReasoning, EntryTypeUser, EntryTypeSystem:
+	case EntryTypeAssistent, EntryTypeReasoning, EntryTypeUser:
 		return entry.Content[0]
 	case EntryTypeToolCall:
 		return fmt.Sprintf("Calling tool [%s] with arguments %s...", entry.Content[0], entry.Content[1])
