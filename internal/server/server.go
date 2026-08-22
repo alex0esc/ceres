@@ -29,14 +29,21 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error loading server config: %v", err)
 	}
+
 	tool.LoadToolConfig(ToolConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading tool config: %v", err)
+	}
 
 	err = tool.RegisterExternal()
 	if err != nil {
-		return nil, fmt.Errorf("error registering external tools: %v", err)
+		return nil, fmt.Errorf("error registering external tool: %v", err)
 	}
 
-	platform.LoadPlatformConfig(PlatformConfigPath)
+	err = platform.LoadPlatformConfig(PlatformConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading platform config: %v", err)
+	}
 
 	// load endpoints configurations
 	endpoints, err := inference.LoadEndpointsFromConfig(EndpointsConfigPath)
