@@ -92,7 +92,7 @@ func (tui *Tui) loadAgentHistory() {
 			tui.appendAgentMessage(entry.String())
 		case history.EntryTypeUser:
 			tui.appendUserMessage(entry.String())
-		case history.EntryTypeSystem, history.EntryTypeToolCall:
+		case history.EntryTypeToolCall:
 			tui.appendSystemMessage(entry.String())
 		case history.EntryTypeReasoning:
 			tui.appendReasoningMessage(entry.String())
@@ -120,7 +120,7 @@ func (tui *Tui) getContentString() string {
 		var rendered string
 		var err error = nil
 		switch tui.tokens[0].Type {
-		case history.TokenTypeSystem, history.EntryTypeToolCall:
+		case history.EntryTypeToolCall:
 			rendered = tui.renderSystem(tokenText.String())
 		case history.TokenTypeReasoning:
 			rendered = tui.renderReasoning(tokenText.String())
@@ -150,7 +150,7 @@ func (tui *Tui) mergeTokens() {
 		tui.appendAgentMessage(text.String())
 	case history.TokenTypeUser: 
 		tui.appendUserMessage(text.String())
-	case history.TokenTypeSystem, history.TokenTypeToolCall:
+	case history.TokenTypeToolCall:
 		tui.appendSystemMessage(text.String())
 	case history.TokenTypeReasoning:
 		tui.appendReasoningMessage(text.String())
