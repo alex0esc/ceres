@@ -65,9 +65,6 @@ func (client *Client) GetHistory() *history.History {
 
 			case responses.EasyInputMessageRoleUser:
 				extractMessageContent(&hist, content)
-
-			case responses.EasyInputMessageRoleSystem:
-				hist.Push(history.Entry { Type: history.EntryTypeSystem, Content: []string{ content.OfString.String() } })
 			}
 
 		case item.OfFunctionCall != nil:
