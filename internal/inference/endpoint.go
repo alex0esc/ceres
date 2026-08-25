@@ -70,7 +70,7 @@ func EnsureAndLoadEndpointsConfig(path string) (Config, error) {
 		cfg = Config{
 			Endpoints: []EndpointConfig{
 				{
-					Name:    "ollama",
+					Name:    "llama",
 					BaseURL: "http://localhost:11434/v1",
 					APIKey:  "none",
 				},
