@@ -9,17 +9,17 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/bubbletea"
-	"github.com/alex0esc/ceres/internal/server"
 )
 
 //create two different writers one for the cli state and one for the tui
 func initLogging() (io.Writer, io.Writer) {
-	if err := os.MkdirAll(filepath.Dir(server.LogFilePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(app.LogFilePath), 0755); err != nil {
 		log.Fatalf("failed to create log directory: %v", err)
 	}
 
-	f, err := os.OpenFile(server.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(app.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}
@@ -29,17 +29,12 @@ func initLogging() (io.Writer, io.Writer) {
 }
 
 //startup sequnce for the server
-func startServer() *server.Server {
-	sv, err := server.NewServer()
+func startApp() {
+	err := app.Start()
 	if err != nil {
-		log.Fatalf("could not load server: %v", err)
+		log.Fatalf("could not start app: %v", err)
 	}
-	err = sv.Initialize()
-	if err != nil {
-		log.Fatalf("could not initialize server: %v", err)
-	}
-	slog.Info("Server started succsessuflly!")
-	return sv
+	slog.Info("App started succsessuflly!")
 }
 
 
@@ -47,14 +42,16 @@ func main() {
 	// make sure errors go into log.txt and the command line if cli is off
 	cliWriter, tuiWriter := initLogging()
 	log.SetOutput(cliWriter)
+
+	// run the app
+	startApp()
 	
 	scanner := bufio.NewScanner(os.Stdin)
-	sv := startServer()		
 
 	//programm loop to make it possible to reload configs and switch to tui dynamically
 	for {
 		if !scanner.Scan() {
-			sv.Shutdown()
+			app.Shutdown()
 			return
 		}
 		if scanner.Err() != nil {
@@ -64,14 +61,14 @@ func main() {
 		switch scanner.Text() {
 		case "tui":
 			log.SetOutput(tuiWriter)
-			tui := bubbletea.RunTui(sv)
+			tui := bubbletea.RunTui()
 			tui.Wait()
 			log.SetOutput(cliWriter)
 		case "reload":
-			sv.Shutdown()
-			sv = startServer()	
+			app.Shutdown()
+			startApp()
 		case "exit":
-			sv.Shutdown()
+			app.Shutdown()
 			return
 		default: 
 			fmt.Println("Unkown command: only exit, tui, reload are available!")

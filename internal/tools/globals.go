@@ -17,7 +17,7 @@ import (
 )
 
 //direcotry where all skills are stored
-const skillBaseDir = "skills/"
+var skillBaseDir string
 
 //all subagents needed for subagent tools
 var subAgents map[string]handles.AgentHandle = nil
@@ -25,6 +25,10 @@ var subAgents map[string]handles.AgentHandle = nil
 // used by all sandbox-related tools (bash, read_file, write_file).
 var dockerClient *client.Client = nil
 
+
+func SetSkillDir(path string) {
+	skillBaseDir = path
+}
 
 
 func SetSubagents(agents map[string]handles.AgentHandle) {
@@ -60,6 +64,15 @@ func InitDockerClient() error {
 	dockerClient = cli
 	return nil
 }
+
+
+func CloseDockerClient() {
+	if dockerClient != nil {
+		dockerClient.Close()
+		dockerClient = nil
+	}
+}
+
 
 func getDockerClient() *client.Client {
 	if dockerClient == nil {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -34,7 +33,6 @@ type Tui struct {
 	rendererUser   glamour.TermRenderer
 	rendererAgent  glamour.TermRenderer
 
-	server *server.Server
 	selectedAgent *agent.Agent
 
 	//current text
@@ -47,9 +45,9 @@ type Tui struct {
 
 
 //runs the tui and return the tea.programm to send information and exit tui
-func RunTui(server *server.Server) *tea.Program {
+func RunTui() *tea.Program {
 	program := tea.NewProgram(
-		initialTui(server),
+		initialTui(),
 		tea.WithAltScreen(), // make it full screen
 		tea.WithMouseCellMotion(),
 	)

@@ -37,6 +37,10 @@ func Register(t Tool) {
 	registry[name] = t
 }
 
+func ClearRegistry() {
+	registry = make(map[string]Tool)
+}
+
 
 func Get(name string) Tool {
 	t, ok := registry[name]

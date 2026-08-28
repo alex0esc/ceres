@@ -30,7 +30,11 @@ func Register(plat Platform) {
 }
 
 
-// Get returns the platform by name and a boolean indicating whether it was found
+func ClearRegistry() {
+	registry = make(map[string]Platform)
+}
+
+
 func Get(name string) Platform {
 	plat, exists := registry[name]
 	if !exists {
