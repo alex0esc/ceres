@@ -17,6 +17,11 @@ import (
 //   - done: marks a task as finished.
 type ChecklistTool struct{}
 
+// NewChecklistTool constructs a ChecklistTool.
+func NewChecklistTool() *ChecklistTool {
+	return &ChecklistTool{}
+}
+
 func (t *ChecklistTool) Name() string {
 	return "checklist"
 }
@@ -175,8 +180,3 @@ func checklistDone(handle handles.AgentHandle, task string) (string, error) {
 
 	return string(out), nil
 }
-
-func init() {
-	tool.Register(&ChecklistTool{})
-}
-

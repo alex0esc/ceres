@@ -15,6 +15,11 @@ import (
 // timezone is given or if the given timezone is invalid.
 type GetTimeTool struct{}
 
+// NewGetTimeTool constructs a GetTimeTool.
+func NewGetTimeTool() GetTimeTool {
+	return GetTimeTool{}
+}
+
 func (GetTimeTool) Name() string {
 	return "get_time"
 }
@@ -23,7 +28,6 @@ func (GetTimeTool) Description() string {
 	return "Returns the current date and time. Optionally accepts an IANA timezone name (e.g. 'Europe/Berlin', 'America/New_York', 'UTC'); defaults to UTC if omitted." +
 		   "ALWAYS use this tool to verify what is meant by today (e.g if the user sais 'what ... today?')!"
 }
-
 
 func (GetTimeTool) Parameters() map[string]any {
 	return map[string]any{
@@ -39,13 +43,11 @@ func (GetTimeTool) Parameters() map[string]any {
 	}
 }
 
-
 func (GetTimeTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Timezone string `json:"timezone"`
 		}
-
 		// argumentsJSON may legitimately be empty ("" or "{}") since
 		// "timezone" is optional.
 		if argumentsJSON != "" {
@@ -53,7 +55,6 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 				return "", fmt.Errorf("get_time: invalid arguments: %w", err)
 			}
 		}
-
 		loc := time.UTC
 		tzName := "UTC"
 		if args.Timezone != "" {
@@ -64,9 +65,7 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 			loc = l
 			tzName = args.Timezone
 		}
-
 		now := time.Now().In(loc)
-
 		out := struct {
 			Timezone  string `json:"timezone"`
 			RFC3339   string `json:"rfc3339"`
@@ -78,7 +77,6 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 			Unix:      now.Unix(),
 			Formatted: now.Format("Monday, 02 January 2006 15:04:05 MST"),
 		}
-
 		result, err := json.Marshal(out)
 		if err != nil {
 			return "", fmt.Errorf("get_time: failed to marshal result: %w", err)
@@ -86,9 +84,3 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 		return string(result), nil
 	}
 }
-
-
-func init() {
-	tool.Register(GetTimeTool{})
-}
-

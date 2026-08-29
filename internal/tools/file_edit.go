@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -17,7 +18,26 @@ import (
 // overwriting a whole file, inserting text before a given line, and
 // replacing a unique string occurrence - into a single tool, dispatched via
 // the "action" parameter ("write", "insert", or "str_replace").
-type FileEditTool struct{}
+type FileEditTool struct {
+	containerName string
+	timeout       time.Duration
+}
+
+// NewFileEditTool constructs a FileEditTool, reading all relevant config
+// values once up front.
+func NewFileEditTool() FileEditTool {
+	cfg := tool.GetToolConfig()
+	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
+	if err != nil {
+		panic(fmt.Errorf("file_edit: error while parsing sandbox.bash.timeout in toolconfig.toml: %w", err))
+	}
+
+	return FileEditTool{
+		containerName: containerName,
+		timeout:       timeout,
+	}
+}
 
 func (FileEditTool) Name() string {
 	return "file_edit"
@@ -76,7 +96,7 @@ func (FileEditTool) Parameters() map[string]any {
 	}
 }
 
-func (FileEditTool) Handler() tool.ToolHandler {
+func (t FileEditTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Action  string `json:"action"`
@@ -92,11 +112,11 @@ func (FileEditTool) Handler() tool.ToolHandler {
 
 		switch args.Action {
 		case "write":
-			return fileWrite(ctx, args.Path, args.Content)
+			return t.fileWrite(ctx, args.Path, args.Content)
 		case "insert":
-			return fileInsert(ctx, args.Path, args.Line, args.Content)
+			return t.fileInsert(ctx, args.Path, args.Line, args.Content)
 		case "str_replace":
-			return fileStrReplace(ctx, args.Path, args.OldStr, args.NewStr)
+			return t.fileStrReplace(ctx, args.Path, args.OldStr, args.NewStr)
 		case "":
 			return "", fmt.Errorf("file_edit: 'action' is required (must be 'write', 'insert' or 'str_replace')")
 		default:
@@ -110,18 +130,12 @@ func (FileEditTool) Handler() tool.ToolHandler {
 // already exists. After writing, it returns useful metadata about the
 // resulting file so the agent can immediately reason about line numbers for
 // follow-up edits without needing a separate file_read call.
-func fileWrite(ctx context.Context, path, content string) (string, error) {
+func (t FileEditTool) fileWrite(ctx context.Context, path, content string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("file_write: path must not be empty")
 	}
 
-	containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-	timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
-	if err != nil {
-		return "", fmt.Errorf("file_write: error while parsing sandbox.bash.timeout in toolconfig.toml")
-	}
-
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 
 	// Ensure the parent directory exists, then write the content via a
@@ -137,7 +151,7 @@ func fileWrite(ctx context.Context, path, content string) (string, error) {
 		"mkdir -p -- \"$(dirname -- %s)\" && cat > %s <<'%s'\n%s\n%s",
 		quotedPath, quotedPath, delim, content, delim,
 	)
-	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), containerName, cmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), t.containerName, cmd)
 	if err != nil {
 		return "", fmt.Errorf("file_write: failed to write file in sandbox: %w", err)
 	}
@@ -153,9 +167,9 @@ func fileWrite(ctx context.Context, path, content string) (string, error) {
 		"wc -c < %s && wc -l < %s && tail -c 1 %s | wc -l",
 		quotedPath, quotedPath, quotedPath,
 	)
-	statCtx, statCancel := context.WithTimeout(ctx, timeout)
+	statCtx, statCancel := context.WithTimeout(ctx, t.timeout)
 	defer statCancel()
-	statOut, statErr, statExit, err := runInContainer(statCtx, getDockerClient(), containerName, statCmd)
+	statOut, statErr, statExit, err := runInContainer(statCtx, getDockerClient(), t.containerName, statCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_write: failed to stat written file: %w", err)
 	}
@@ -199,7 +213,7 @@ func fileWrite(ctx context.Context, path, content string) (string, error) {
 
 // fileInsert inserts content into a file in the sandbox container before
 // the specified line number.
-func fileInsert(ctx context.Context, path string, line int, content string) (string, error) {
+func (t FileEditTool) fileInsert(ctx context.Context, path string, line int, content string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", fmt.Errorf("file_insert: path must not be empty")
 	}
@@ -222,20 +236,12 @@ func fileInsert(ctx context.Context, path string, line int, content string) (str
 		return respond(0)
 	}
 
-	// Load config once
-	cfg := tool.GetToolConfig()
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
-	if err != nil {
-		return "", fmt.Errorf("file_insert: invalid timeout: %w", err)
-	}
-
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 
 	// Read target file
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), t.containerName, readCmd)
 	if err != nil {
 		return "", err
 	}
@@ -271,7 +277,7 @@ func fileInsert(ctx context.Context, path string, line int, content string) (str
 	// Write safely via base64 to avoid shell escaping & heredoc issues
 	b64 := base64.StdEncoding.EncodeToString([]byte(newContent))
 	writeCmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
-	_, stderr, exitCode, err = runInContainer(execCtx, getDockerClient(), containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, getDockerClient(), t.containerName, writeCmd)
 	if err != nil {
 		return "", err
 	}
@@ -286,7 +292,7 @@ func fileInsert(ctx context.Context, path string, line int, content string) (str
 // the sandbox container. The old string must match the file's current
 // content exactly and appear exactly once; this avoids ambiguous edits and
 // the line-shifting issues that come with line-number-based replacements.
-func fileStrReplace(ctx context.Context, path, oldStr, newStr string) (string, error) {
+func (t FileEditTool) fileStrReplace(ctx context.Context, path, oldStr, newStr string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("file_str_replace: path must not be empty")
 	}
@@ -294,19 +300,13 @@ func fileStrReplace(ctx context.Context, path, oldStr, newStr string) (string, e
 		return "", fmt.Errorf("file_str_replace: old_str must not be empty")
 	}
 
-	containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-	timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.bash.timeout", "60s"))
-	if err != nil {
-		return "", fmt.Errorf("file_str_replace: error while parsing sandbox.bash.timeout in toolconfig.toml")
-	}
-
-	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 	cli := getDockerClient()
 
 	// Read the current file content.
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, cli, containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, readCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to read file from sandbox: %w", err)
 	}
@@ -328,7 +328,7 @@ func fileStrReplace(ctx context.Context, path, oldStr, newStr string) (string, e
 	// delimiter to avoid clashing with content that itself contains
 	// "EOF"-like markers.
 	writeCmd := fmt.Sprintf("cat > %s <<'CERES_EOF_MARKER'\n%s\nCERES_EOF_MARKER", shellQuote(path), newContent)
-	_, stderr, exitCode, err = runInContainer(execCtx, cli, containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, cli, t.containerName, writeCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to write file to sandbox: %w", err)
 	}
@@ -373,8 +373,4 @@ func parseStatOutput(stdout string) (byteSize int, lineCount int, endsWithNewlin
 	}
 	endsWithNewline = newlineFlag == 1
 	return byteSize, lineCount, endsWithNewline, nil
-}
-
-func init() {
-	tool.Register(FileEditTool{})
 }

@@ -2,8 +2,8 @@ package bubbletea
 
 import (
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/internal/server"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -88,13 +88,12 @@ func newTextArea() textarea.Model {
 	return ta
 }
 
-func initialTui(server *server.Server) *Tui {
+func initialTui() *Tui {
 	
 	return &Tui{
 		textarea: newTextArea(),
-		list:      newList(server.GetAgentList()),
+		list:      newList(app.GetAgentList()),
 		focus:     focusInput,
-		server:    server,
 		inputChan: make(chan history.Token, 128),
 		selectedAgent: nil,
 	}

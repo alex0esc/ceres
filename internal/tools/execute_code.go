@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -16,21 +17,48 @@ import (
 // ExecuteCodeTool runs a short Python snippet inside the sandbox container
 // and returns its stdout/stderr/exit code. Intended for quick, self-contained
 // tasks (calculations, data wrangling, etc.), not long-running scripts.
-type ExecuteCodeTool struct{}
+type ExecuteCodeTool struct {
+	containerName string
+	timeout       time.Duration
+	maxOutput     int64
+}
+
+// NewExecuteCodeTool constructs an ExecuteCodeTool, reading all relevant
+// config values once up front.
+func NewExecuteCodeTool() ExecuteCodeTool {
+	cfg := tool.GetToolConfig()
+
+	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
+
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "execute_code.timeout", "30s"))
+	if err != nil {
+		panic(fmt.Errorf("execute_code: error while parsing execute_code.timeout in toolconfig.toml"))
+	}
+	if timeout <= 0 {
+		panic(fmt.Errorf("execute_code: execute_code.timeout must be positive"))
+	}
+
+	var defMaxOutput int64 = 1024 * 20
+	maxOutput := config.ReadEntry(cfg, "execute_code.max_output_b", defMaxOutput)
+
+	return ExecuteCodeTool{
+		containerName: containerName,
+		timeout:       timeout,
+		maxOutput:     maxOutput,
+	}
+}
 
 func (ExecuteCodeTool) Name() string {
 	return "execute_code"
 }
 
-func (ExecuteCodeTool) Description() string {
-	var defMaxOutput int64 = 1024 * 20
-	maxOutput := config.ReadEntry(tool.GetToolConfig(), "execute_code.max_output_b", defMaxOutput)
+func (t ExecuteCodeTool) Description() string {
 	return fmt.Sprintf(
 		"Executes a short Python 3 code snippet inside the sandbox container and returns stdout, stderr, and the exit code. "+
 			"Use this for on-demand calculations, quick data processing, or logic checks — not for long-running or interactive scripts. "+
 			"The snippet has no persistent state between calls (each execution is a fresh process); print() whatever result you need to see. "+
 			"Combined stdout+stderr output larger than %d bytes will be truncated.",
-		maxOutput,
+		t.maxOutput,
 	)
 }
 
@@ -48,8 +76,7 @@ func (ExecuteCodeTool) Parameters() map[string]any {
 	}
 }
 
-
-func (ExecuteCodeTool) Handler() tool.ToolHandler {
+func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Code string `json:"code"`
@@ -61,36 +88,20 @@ func (ExecuteCodeTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("execute_code: code must not be empty")
 		}
 
-		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "execute_code.timeout", "30s"))
-		if err != nil {
-			return "", fmt.Errorf("execute_code: error while parsing execute_code.timeout in toolconfig.toml")
-		}
-		if timeout <= 0 {
-			return "", fmt.Errorf("execute_code: execute_code.timeout must be positive")
-		}
-
-		var defMaxOutput int64 = 1024 * 20
-		maxOutput := config.ReadEntry(tool.GetToolConfig(), "execute_code.max_output_b", defMaxOutput)
-
 		cli := getDockerClient()
-
 		// Pipe the code through base64 to avoid any shell-quoting issues with
 		// the snippet's own content (quotes, $, backticks, newlines, ...).
 		// No temp file is written to disk — python3 reads the script from stdin.
 		encoded := base64.StdEncoding.EncodeToString([]byte(args.Code))
 		runCmd := fmt.Sprintf("echo %s | base64 -d | python3 -", shellQuote(encoded))
-
-		execCtx, cancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
-		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, containerName, runCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, runCmd)
 		if err != nil {
 			return "", fmt.Errorf("execute_code: failed to execute code in sandbox: %w", err)
 		}
-
-		stdout = truncateOutput(stdout, maxOutput)
-		stderr = truncateOutput(stderr, maxOutput)
-
+		stdout = truncateOutput(stdout, t.maxOutput)
+		stderr = truncateOutput(stderr, t.maxOutput)
 		out := struct {
 			Stdout   string `json:"stdout"`
 			Stderr   string `json:"stderr"`
@@ -108,7 +119,6 @@ func (ExecuteCodeTool) Handler() tool.ToolHandler {
 	}
 }
 
-
 func truncateOutput(s string, maxBytes int64) string {
 	if maxBytes <= 0 || int64(len(s)) <= maxBytes {
 		return s
@@ -116,8 +126,4 @@ func truncateOutput(s string, maxBytes int64) string {
 	suffix := "\n... [truncated]"
 	cut := max(maxBytes - int64(len(suffix)), 0)
 	return s[:cut] + suffix
-}
-
-func init() {
-	tool.Register(ExecuteCodeTool{})
 }

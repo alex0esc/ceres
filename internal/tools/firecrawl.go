@@ -21,6 +21,23 @@ type WebExtractTool struct {
 	// HTTPClient allows overriding the client (useful for tests). Defaults to
 	// a client with a 60s timeout if nil (crawls can take a while).
 	HTTPClient *http.Client
+
+	apiKey  string
+	baseURL string
+}
+
+// NewWebExtractTool constructs a WebExtractTool, reading all relevant
+// config values once up front.
+func NewWebExtractTool() *WebExtractTool {
+	cfg := tool.GetToolConfig()
+
+	apiKey := config.ReadEntry(cfg, "firecrawl.api_key", "")
+	baseURL := strings.TrimRight(config.ReadEntry(cfg, "firecrawl.url", "http://localhost:3002"), "/")
+
+	return &WebExtractTool{
+		apiKey:  apiKey,
+		baseURL: baseURL,
+	}
 }
 
 type webExtractArgs struct {
@@ -84,16 +101,6 @@ func (t *WebExtractTool) Parameters() map[string]any {
 }
 
 
-func (t *WebExtractTool) apiKey() string {
-	apiKey := config.ReadEntry(tool.GetToolConfig(), "firecrawl.api_key", "")
-	return apiKey
-}
-
-func (t *WebExtractTool) baseURL() string {
-	url := config.ReadEntry(tool.GetToolConfig(), "firecrawl.url", "http://localhost:3002")
-	return strings.TrimRight(url, "/")
-}
-
 func (t *WebExtractTool) client() *http.Client {
 	if t.HTTPClient != nil {
 		return t.HTTPClient
@@ -132,13 +139,13 @@ func (t *WebExtractTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("failed to build request body: %w", err)
 		}
 
-		endpoint := t.baseURL() + "/v1/scrape"
+		endpoint := t.baseURL + "/v1/scrape"
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return "", fmt.Errorf("failed to build request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+t.apiKey())
+		req.Header.Set("Authorization", "Bearer "+t.apiKey)
 
 		resp, err := t.client().Do(req)
 		if err != nil {
@@ -207,8 +214,4 @@ func truncateStr(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
-}
-
-func init() {
-	tool.Register(&WebExtractTool{})
 }

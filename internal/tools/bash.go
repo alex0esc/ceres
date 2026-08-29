@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -22,45 +23,60 @@ const killAfterBuffer = 5 * time.Second
 // the Docker SDK. It is intended to give the agent an isolated environment
 // to run arbitrary commands without affecting the host or the agent's own
 // container.
-type BashTool struct{}
+type BashTool struct {
+	maxTimeout    time.Duration
+	containerName string
+}
+
+// NewBashTool constructs a BashTool, reading all relevant config values once
+// up front so the handler doesn't need to re-read config on every call.
+func NewBashTool() BashTool {
+	maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
+	if err != nil || maxTimeout <= 0 {
+		log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
+	}
+
+	containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+
+	return BashTool{
+		maxTimeout:    maxTimeout,
+		containerName: containerName,
+	}
+}
+
 
 func (BashTool) Name() string {
 	return "bash"
 }
 
-func (BashTool) Description() string {
-	maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-	if err != nil || maxTimeout <= 0 {
-		log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
-	}	
+func (b BashTool) Description() string {
 	return fmt.Sprintf(
 		"Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code.\n"+
-			"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n" +
+			"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n"+
 			"The maximum allowed timeout is %s; you may optionally specify a shorter one via the \"timeout_seconds\" argument.",
-		maxTimeout,
+		b.maxTimeout,
 	)
 }
 
-
 func (BashTool) Parameters() map[string]any {
-    return map[string]any{
-        "type": "object",
-        "properties": map[string]any{
-            "command": map[string]any{
-                "type":        "string",
-                "description": "The bash command to execute inside the sandbox container.",
-            },
-            "timeout_seconds": map[string]any{
-                "type":        []string{"number", "null"}, 
-                "description": "Optional. Maximum time in seconds the command may run before being killed.",
-            },
-        },
-        "required":             []string{"command", "timeout_seconds"}, 
-        "additionalProperties": false,
-    }
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"command": map[string]any{
+				"type":        "string",
+				"description": "The bash command to execute inside the sandbox container.",
+			},
+			"timeout_seconds": map[string]any{
+				"type":        []string{"number", "null"},
+				"description": "Optional. Maximum time in seconds the command may run before being killed.",
+			},
+		},
+		"required":             []string{"command", "timeout_seconds"},
+		"additionalProperties": false,
+	}
 }
 
-func (BashTool) Handler() tool.ToolHandler {
+func (b BashTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Command        string   `json:"command"`
@@ -73,21 +89,14 @@ func (BashTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("bash: command must not be empty")
 		}
 
-		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-
-		maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-		if err != nil || maxTimeout <= 0 {
-			log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
-		}
-
-		sandboxTimeout := maxTimeout
+		sandboxTimeout := b.maxTimeout
 		if args.TimeoutSeconds != nil {
 			requested := time.Duration(*args.TimeoutSeconds * float64(time.Second))
 			if requested <= 0 {
 				return "", fmt.Errorf("bash: timeout_seconds must be greater than 0")
 			}
-			if requested > maxTimeout {
-				return "", fmt.Errorf("bash: timeout_seconds (%s) exceeds the maximum allowed timeout (%s)", requested, maxTimeout)
+			if requested > b.maxTimeout {
+				return "", fmt.Errorf("bash: timeout_seconds (%s) exceeds the maximum allowed timeout (%s)", requested, b.maxTimeout)
 			}
 			sandboxTimeout = requested
 		}
@@ -106,7 +115,7 @@ func (BashTool) Handler() tool.ToolHandler {
 			shellQuote(args.Command),
 		)
 
-		stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), containerName, wrappedCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), b.containerName, wrappedCmd)
 		if err != nil {
 			return "", fmt.Errorf("bash: failed to execute command in sandbox: %w", err)
 		}
@@ -125,8 +134,4 @@ func (BashTool) Handler() tool.ToolHandler {
 		}
 		return string(result), nil
 	}
-}
-
-func init() {
-	tool.Register(BashTool{})
 }

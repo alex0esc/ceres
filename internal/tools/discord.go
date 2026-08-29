@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -14,15 +13,35 @@ import (
 )
 
 // DiscordTool bundles discord operations, dispatched via "action":
-// "create", "post", "list", "remove".
+// "create", "post", "list", "remove". It creates and manages its own
+// discordgo session independently of the Discord platform, using the REST
+// API only (no gateway connection is opened, so no Session.Open() call is
+// needed for these operations).
 type DiscordTool struct {
 	session *discordgo.Session
 	guildID string
+	userID  string
 }
 
-func (t *DiscordTool) SetSessionGuildID(session *discordgo.Session, id string) {
-	t.session = session
-	t.guildID = id
+// NewDiscordTool constructs a DiscordTool, reading all relevant config
+// values once up front and creating its own discordgo session.
+func NewDiscordTool() *DiscordTool {
+	cfg := platform.GetPlatformConfig()
+
+	botToken := config.ReadEntry(cfg, "discord.bot_token", "<token>")
+	guildID := config.ReadEntry(cfg, "discord.guild_id", "<guild_id>")
+	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
+
+	session, err := discordgo.New("Bot " + botToken)
+	if err != nil {
+		panic(fmt.Errorf("discord_tool: failed to create session: %w", err))
+	}
+
+	return &DiscordTool{
+		session: session,
+		guildID: guildID,
+		userID:  userID,
+	}
 }
 
 func (t *DiscordTool) Name() string {
@@ -76,7 +95,7 @@ func (t *DiscordTool) Handler() tool.ToolHandler {
 		}
 
 		switch args.Action {
-		case "dm": 
+		case "dm":
 			return t.discordDM(args.Message)
 		case "create":
 			return t.discordCreateChannel(args.Channel)
@@ -101,21 +120,20 @@ func (t *DiscordTool) discordDM(message string) (string, error) {
 		return "", fmt.Errorf("discord_dm: message must not be empty")
 	}
 
-	userID := config.ReadEntry(platform.GetPlatformConfig(), "discord.user_id", "<id>")
-	if userID == "" {
+	if t.userID == "" {
 		return "", fmt.Errorf("discord_dm: user_id is not configured under 'discord.user_id'")
 	}
 
-	channel, err := t.session.UserChannelCreate(userID)
+	channel, err := t.session.UserChannelCreate(t.userID)
 	if err != nil {
-		return "", fmt.Errorf("discord_dm: failed to create DM channel with user %s: %w", userID, err)
+		return "", fmt.Errorf("discord_dm: failed to create DM channel with user %s: %w", t.userID, err)
 	}
 
 	if err := SendChunked(t.session, channel.ID, message); err != nil {
 		return "", fmt.Errorf("discord_dm: failed to send direct message: %w", err)
 	}
 
-	out, err := json.Marshal(map[string]any{"channel_id": channel.ID, "user_id": userID})
+	out, err := json.Marshal(map[string]any{"channel_id": channel.ID, "user_id": t.userID})
 	if err != nil {
 		return "", fmt.Errorf("discord_dm: failed to marshal result: %w", err)
 	}
@@ -241,71 +259,4 @@ func (t *DiscordTool) findChannelByName(name string) (*discordgo.Channel, error)
 		}
 	}
 	return nil, nil
-}
-
-
-// discordMaxMessageLength is the maximum number of characters allowed per
-// Discord message. Discord's hard limit is 2000 for normal messages (up to
-// 4000 in some boosted contexts); we stay safely under that.
-const discordMaxMessageLength = 1900
-
-// sendChunked sends msg to the given channel, splitting it into multiple
-// messages if it exceeds Discord's length limit.
-func SendChunked(s *discordgo.Session, channelID, msg string) error {
-	for _, chunk := range splitMessage(msg, discordMaxMessageLength) {
-		if chunk == "" {
-			continue
-		}
-		if _, err := s.ChannelMessageSend(channelID, chunk); err != nil {
-			return fmt.Errorf("error while sending message to discord: %v", err)
-		}
-	}
-	return nil
-}
-
-
-
-// splitMessage splits s into chunks of at most maxLen characters, preferring
-// to break on newlines and, failing that, on spaces, so that words and lines
-// aren't cut in the middle where possible.
-func splitMessage(s string, maxLen int) []string {
-	if len(s) <= maxLen {
-		return []string{s}
-	}
-
-	var chunks []string
-	for len(s) > maxLen {
-		limit := maxLen
-
-		// try to break on the last newline within the limit
-		splitAt := -1
-		if idx := lastIndexInRange(s, "\n", limit); idx > 0 {
-			splitAt = idx + 1 // include the newline in the current chunk
-		} else if idx := lastIndexInRange(s, " ", limit); idx > 0 {
-			splitAt = idx + 1 // include the space in the current chunk
-		} else {
-			splitAt = limit // hard cut, no good break point found
-		}
-
-		chunks = append(chunks, s[:splitAt])
-		s = s[splitAt:]
-	}
-	if len(s) > 0 {
-		chunks = append(chunks, s)
-	}
-	return chunks
-}
-
-
-// lastIndexInRange returns the last index of sep within s[:limit], or -1 if
-// not found.
-func lastIndexInRange(s, sep string, limit int) int {
-	if limit > len(s) {
-		limit = len(s)
-	}
-	return strings.LastIndex(s[:limit], sep)
-}
-
-func init() {
-	tool.Register(&DiscordTool{})
 }

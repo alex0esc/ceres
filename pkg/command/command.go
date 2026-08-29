@@ -33,6 +33,12 @@ func Register(cmd Command) {
 }
 
 
+func ClearRegistry() {
+	registry = make(map[string]Command)
+}
+
+
+
 // All returns all registered commands, sorted alphabetically by name.
 func All() []Command {
 	out := make([]Command, 0, len(registry))

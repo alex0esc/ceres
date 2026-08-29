@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -106,7 +107,7 @@ func (tui *Tui) submitMessage() {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
 		if !cmd {
 			tui.selectedAgent.Client.Interrupt()
-			timeout, err := time.ParseDuration(config.ReadEntry(tui.server.GetConfig(), "tui.message_timeout", "60m"))
+			timeout, err := time.ParseDuration(config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", "60m"))
 			if err != nil {
 				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
 			}
@@ -139,12 +140,12 @@ func (tui *Tui) applyListSelection() {
 		if old != nil {
 			old.Client.ClearOnEvent()
 		}
-		tui.selectedAgent = tui.server.GetAgent(selected.botName)
-		tui.loadAgentHistory()
-		tui.viewport.SetContent(tui.getContentString())
+		tui.selectedAgent = app.GetAgent(selected.botName)
 		tui.selectedAgent.Client.SetOnEvent(func(token history.Token) {
 			tui.inputChan <- token
 		})
+		tui.loadAgentHistory()
+		tui.viewport.SetContent(tui.getContentString())
 	}
 }
 

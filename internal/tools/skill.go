@@ -8,20 +8,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // SkillTool bundles read and list operations on files within the
-// "skills/" directory into a single tool, dispatched via the "action"
-// parameter ("list" or "read"). The base path is always fixed to
-// "skills/"; both operations only accept paths relative to it and guard
-// against directory traversal outside of it.
-type SkillTool struct{}
+type SkillTool struct {
+	readMaxBytes int
+}
 
-// skillReadMaxBytes limits how much of a file is returned in one call, to
-// avoid flooding the model context with very large files.
-const skillReadMaxBytes = 200_000
+func NewSkillTool() SkillTool {
+	readMaxBytes := config.ReadEntry(tool.GetToolConfig(), "skill.read_max_bytes", 200_000)
+
+	return SkillTool{
+		readMaxBytes: readMaxBytes,
+	}
+}
 
 func (SkillTool) Name() string {
 	return "skill"
@@ -63,7 +66,7 @@ func (SkillTool) Parameters() map[string]any {
 	}
 }
 
-func (SkillTool) Handler() tool.ToolHandler {
+func (s SkillTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Action    string `json:"action"`
@@ -84,7 +87,7 @@ func (SkillTool) Handler() tool.ToolHandler {
 			if strings.TrimSpace(args.Path) == "" {
 				return "", fmt.Errorf("skill: 'path' is required when action='read'")
 			}
-			return skillRead(args.Path)
+			return skillRead(args.Path, s.readMaxBytes)
 		case "":
 			return "", fmt.Errorf("skill: 'action' is required (must be 'list' or 'read')")
 		default:
@@ -94,7 +97,7 @@ func (SkillTool) Handler() tool.ToolHandler {
 }
 
 // skillRead reads a single file within skillBaseDir, relative to it.
-func skillRead(path string) (string, error) {
+func skillRead(path string, readMaxBytes int) (string, error) {
 	targetPath := filepath.Clean(filepath.Join(skillBaseDir, path))
 	baseClean := filepath.Clean(skillBaseDir)
 	if targetPath != baseClean && !strings.HasPrefix(targetPath, baseClean+string(os.PathSeparator)) {
@@ -119,8 +122,8 @@ func skillRead(path string) (string, error) {
 
 	truncated := false
 	content := data
-	if len(content) > skillReadMaxBytes {
-		content = content[:skillReadMaxBytes]
+	if len(content) > readMaxBytes {
+		content = content[:readMaxBytes]
 		truncated = true
 	}
 
@@ -235,8 +238,4 @@ func skillList(subpath string, recursive bool) (string, error) {
 		return "", fmt.Errorf("skill_list: failed to marshal result: %w", err)
 	}
 	return string(result), nil
-}
-
-func init() {
-	tool.Register(SkillTool{})
 }

@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -21,6 +22,18 @@ type SearxngTool struct {
 	// HTTPClient allows overriding the client (useful for tests). Defaults to
 	// a client with a 10s timeout if nil.
 	HTTPClient *http.Client
+
+	baseURL string
+}
+
+// NewSearxngTool constructs a SearxngTool, reading all relevant config
+// values once up front.
+func NewSearxngTool() *SearxngTool {
+	baseURL := config.ReadEntry(tool.GetToolConfig(), "searxng.url", "http://localhost:8080")
+
+	return &SearxngTool{
+		baseURL: baseURL,
+	}
 }
 
 type searxngArgs struct {
@@ -69,11 +82,6 @@ func (t *SearxngTool) Parameters() map[string]any {
 }
 
 
-func (t *SearxngTool) baseURL() string {
-	url := config.ReadEntry(tool.GetToolConfig(), "searxng.url", "http://localhost:8080")
-	return url
-}
-
 func (t *SearxngTool) client() *http.Client {
 	if t.HTTPClient != nil {
 		return t.HTTPClient
@@ -91,7 +99,7 @@ func (t *SearxngTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("query must not be empty")
 		}
 
-		base := t.baseURL()
+		base := t.baseURL
 		if base == "" {
 			return "", fmt.Errorf("no SearXNG base URL configured (set SearxngTool.BaseURL or SEARXNG_URL)")
 		}
@@ -163,8 +171,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
-}
-
-func init() {
-	tool.Register(&SearxngTool{})
 }

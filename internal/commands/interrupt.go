@@ -7,12 +7,12 @@ import (
 )
 
 
-func init() {
-	command.Register(command.Command{
+func NewInterruptCommand() command.Command {
+	return command.Command{
 		Name:        "itr",
 		Description: "Interrupt the selected agent.",
 		Handler:     handleInterrupt,
-	})
+	}
 }
 
 func handleInterrupt(agnt handles.AgentHandle, args []string) string {

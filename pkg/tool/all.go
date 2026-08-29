@@ -3,7 +3,8 @@ package tool
 // TODO import all external tools here
 import "context"
 
-// HINT for tools that need a manual registration after the tool config loaded
+
+// register all external tools here tool.Register(tool.NewTool())
 func RegisterExternal() error {
 	return registerAlpacaMcpTools(context.Background())
 }
