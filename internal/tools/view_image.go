@@ -19,19 +19,47 @@ import (
 
 // ViewImageTool reads an image from the sandbox container and appends it
 // to the agent's chat history as a base64-encoded image.
-type ViewImageTool struct{}
+type ViewImageTool struct {
+	containerName string
+	timeout       time.Duration
+	maxSize       int64
+}
+
+// NewViewImageTool constructs a ViewImageTool, reading all relevant config
+// values once up front.
+func NewViewImageTool() ViewImageTool {
+	cfg := tool.GetToolConfig()
+
+	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
+
+	// Use the same timeout configured for sandbox commands.
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
+	if err != nil {
+		panic(fmt.Errorf("view_image: error while parsing sandbox.bash.timeout in toolconfig.toml: %w", err))
+	}
+	if timeout <= 0 {
+		panic(fmt.Errorf("view_image: sandbox.bash.timeout must be positive"))
+	}
+
+	var defSize int64 = 4096
+	maxSize := config.ReadEntry(cfg, "view_image.max_size_kb", defSize) * 1024
+
+	return ViewImageTool{
+		containerName: containerName,
+		timeout:       timeout,
+		maxSize:       maxSize,
+	}
+}
 
 func (ViewImageTool) Name() string {
 	return "view_image"
 }
 
-func (ViewImageTool) Description() string {
-	var def_size int64 = 4096
-	maxSize := config.ReadEntry(tool.GetToolConfig(), "view_image.max_size_kb", def_size) * 1024
+func (t ViewImageTool) Description() string {
 	return fmt.Sprintf(
 		"Reads an image from the sandbox container and appends it as user message in the chat.\n"+
 		"The path may be absolute or relative to the sandbox working directory. Images larger than %d bytes are rejected.",
-		maxSize,
+		t.maxSize,
 	)
 }
 
@@ -49,7 +77,7 @@ func (ViewImageTool) Parameters() map[string]any {
 	}
 }
 
-func (ViewImageTool) Handler() tool.ToolHandler {
+func (t ViewImageTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Path string `json:"path"`
@@ -63,36 +91,9 @@ func (ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: path must not be empty")
 		}
 
-		containerName := config.ReadEntry(
-			tool.GetToolConfig(),
-			"sandbox.container_name",
-			"ceres-sandbox",
-		)
-
-		// Use the same timeout configured for sandbox commands.
-		timeout, err := time.ParseDuration(
-			config.ReadEntry(
-				tool.GetToolConfig(),
-				"sandbox.bash.timeout",
-				"60s",
-			),
-		)
-		if err != nil {
-			return "", fmt.Errorf(
-				"view_image: error while parsing sandbox.bash.timeout in toolconfig.toml: %w",
-				err,
-			)
-		}
-		if timeout <= 0 {
-			return "", fmt.Errorf("view_image: sandbox.bash.timeout must be positive")
-		}
-
-		var def_size int64 = 4096
-		maxSize := config.ReadEntry(tool.GetToolConfig(), "view_image.max_size_kb", def_size) * 1024
-
 		cli := getDockerClient()
 
-		statCtx, statCancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		statCmd := fmt.Sprintf(
 			"stat -c %%s -- %s",
 			shellQuote(args.Path),
@@ -101,7 +102,7 @@ func (ViewImageTool) Handler() tool.ToolHandler {
 		statOut, statErr, statExit, err := runInContainer(
 			statCtx,
 			cli,
-			containerName,
+			t.containerName,
 			statCmd,
 		)
 		statCancel()
@@ -131,16 +132,16 @@ func (ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: image %q is empty", args.Path)
 		}
 
-		if size > maxSize {
+		if size > t.maxSize {
 			return "", fmt.Errorf(
 				"view_image: image is %d bytes, which exceeds the configured limit of %d bytes",
 				size,
-				maxSize,
+				t.maxSize,
 			)
 		}
 
 		// Read and base64-encode the image inside the sandbox.
-		execCtx, cancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
 
 		cmd := fmt.Sprintf(
@@ -151,7 +152,7 @@ func (ViewImageTool) Handler() tool.ToolHandler {
 		stdout, stderr, exitCode, err := runInContainer(
 			execCtx,
 			cli,
-			containerName,
+			t.containerName,
 			cmd,
 		)
 		if err != nil {
@@ -235,9 +236,4 @@ func detectImageMimeType(path string, data []byte) string {
 	}
 
 	return ""
-}
-
-
-func init() {
-	tool.Register(ViewImageTool{})
 }

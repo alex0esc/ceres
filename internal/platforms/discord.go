@@ -11,28 +11,52 @@ import (
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/platform"
-	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/bwmarrin/discordgo"
 )
 
 
 
 type Discord struct {
-	session *discordgo.Session
+	session     *discordgo.Session
 	stopChannel chan struct{}
+
+	botToken       string
+	agentName      string
+	userID         string
+	messageTimeout time.Duration
 }
 
-// NewSession creates the discord session and registers the discord_post tool
-// with it. It is a no-op if the session has already been created.
+// NewDiscord constructs a Discord platform, reading all relevant config
+// values once up front. It creates its own session, independent of the
+// DiscordTool's session, since it needs a gateway (websocket) connection
+// for listening to DMs while the tool only needs the REST API.
+func NewDiscord() *Discord {
+	cfg := platform.GetPlatformConfig()
+
+	botToken := config.ReadEntry(cfg, "discord.bot_token", "<token>")
+	agentName := config.ReadEntry(cfg, "discord.agent_name", "Ceres")
+	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
+
+	messageTimeout, err := time.ParseDuration(config.ReadEntry(cfg, "discord.message_timeout", "60m"))
+	if err != nil {
+		log.Fatalf("error while parsing discord.message_timeout in server config: %v", err)
+	}
+
+	return &Discord{
+		botToken:       botToken,
+		agentName:      agentName,
+		userID:         userID,
+		messageTimeout: messageTimeout,
+	}
+}
+
+// NewSession creates the discord session used for listening to DMs. It is a
+// no-op if the session has already been created.
 func (d *Discord) NewSession() error {
-	token := config.ReadEntry(platform.GetPlatformConfig(), "discord.bot_token", "<token>")
-	session, err := discordgo.New("Bot " + token)
+	session, err := discordgo.New("Bot " + d.botToken)
 	if err != nil {
 		return fmt.Errorf("discord: failed to create session: %w", err)
 	}
-	guildID := config.ReadEntry(platform.GetPlatformConfig(), "discord.guild_id", "<guild_id>")
-	//make sure discord post has the right parameters
-	tool.Get("discord").(*tools.DiscordTool).SetSessionGuildID(session, guildID)
 	d.session = session
 	return nil
 }
@@ -44,7 +68,7 @@ func (d *Discord) Name() string {
 
 
 func (d *Discord) AgentName() string {
-	return config.ReadEntry(platform.GetPlatformConfig(), "discord.agent_name", "Ceres")
+	return d.agentName
 }
 
 
@@ -83,8 +107,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		return
 	}
 	// only allow the configured user to talk to the bot
-	allowedUserID := config.ReadEntry(platform.GetPlatformConfig(), "discord.user_id", "<id>")
-	if allowedUserID == "" || m.Author.ID != allowedUserID {
+	if d.userID == "" || m.Author.ID != d.userID {
 		return
 	}
 	// show typing indicator while the task is being processed
@@ -108,11 +131,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		s.ChannelMessageSend(m.ChannelID, msg)
 		return
 	}
-	timeout, err := time.ParseDuration(config.ReadEntry(platform.GetPlatformConfig(), "discord.message_timeout", "60m"))
-	if err != nil {
-		log.Fatalf("error while parsing tui_timeout in server config: %v", err)
-	}
-	task := handles.TaskAsk(m.Content, timeout)
+	task := handles.TaskAsk(m.Content, d.messageTimeout)
 	resultCh := agent.SubmitTask(&task)
 	result := <-resultCh
 	close(stopTyping)
@@ -136,9 +155,4 @@ func (d *Discord) StopListen() {
 	default:
 		close(d.stopChannel)
 	}
-}
-
-
-func init() {
-	platform.Register(&Discord{})
 }

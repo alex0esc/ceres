@@ -11,6 +11,7 @@ import (
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
+	"github.com/bwmarrin/discordgo"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -156,4 +157,68 @@ func demuxDockerStream(reader io.Reader, stdout, stderr io.Writer) (int64, error
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+
+
+// discordMaxMessageLength is the maximum number of characters allowed per
+// Discord message. Discord's hard limit is 2000 for normal messages (up to
+// 4000 in some boosted contexts); we stay safely under that.
+const discordMaxMessageLength = 1900
+
+// sendChunked sends msg to the given channel, splitting it into multiple
+// messages if it exceeds Discord's length limit.
+func SendChunked(s *discordgo.Session, channelID, msg string) error {
+	for _, chunk := range splitMessage(msg, discordMaxMessageLength) {
+		if chunk == "" {
+			continue
+		}
+		if _, err := s.ChannelMessageSend(channelID, chunk); err != nil {
+			return fmt.Errorf("error while sending message to discord: %v", err)
+		}
+	}
+	return nil
+}
+
+
+
+// splitMessage splits s into chunks of at most maxLen characters, preferring
+// to break on newlines and, failing that, on spaces, so that words and lines
+// aren't cut in the middle where possible.
+func splitMessage(s string, maxLen int) []string {
+	if len(s) <= maxLen {
+		return []string{s}
+	}
+
+	var chunks []string
+	for len(s) > maxLen {
+		limit := maxLen
+
+		// try to break on the last newline within the limit
+		splitAt := -1
+		if idx := lastIndexInRange(s, "\n", limit); idx > 0 {
+			splitAt = idx + 1 // include the newline in the current chunk
+		} else if idx := lastIndexInRange(s, " ", limit); idx > 0 {
+			splitAt = idx + 1 // include the space in the current chunk
+		} else {
+			splitAt = limit // hard cut, no good break point found
+		}
+
+		chunks = append(chunks, s[:splitAt])
+		s = s[splitAt:]
+	}
+	if len(s) > 0 {
+		chunks = append(chunks, s)
+	}
+	return chunks
+}
+
+
+// lastIndexInRange returns the last index of sep within s[:limit], or -1 if
+// not found.
+func lastIndexInRange(s, sep string, limit int) int {
+	if limit > len(s) {
+		limit = len(s)
+	}
+	return strings.LastIndex(s[:limit], sep)
 }

@@ -9,12 +9,12 @@ import (
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
-func init() {
-	command.Register(command.Command{
+func NewClearCommand() command.Command {
+	return command.Command{
 		Name:        "clr",
 		Description: "Clear the chat history of the selected agent.",
 		Handler:     handleClear,
-	})
+	}
 }
 
 func handleClear(agnt handles.AgentHandle, args []string) string {

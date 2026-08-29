@@ -6,13 +6,16 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/commands"
 	_ "github.com/alex0esc/ceres/internal/commands"
 	"github.com/alex0esc/ceres/internal/inference"
+	"github.com/alex0esc/ceres/internal/platforms"
 	_ "github.com/alex0esc/ceres/internal/platforms"
 	"github.com/robfig/cron/v3"
 
 	"github.com/alex0esc/ceres/internal/cronejob"
 	"github.com/alex0esc/ceres/internal/tools"
+	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/platform"
@@ -33,12 +36,30 @@ func  Start() error {
 		return err
 	}
 
+	registerInternalPlatforms()
+	err = platform.RegisterExternal()
+	if err != nil {
+		return fmt.Errorf("error registering external platform: %v", err)
+	}
+
 	initPlatforms()
 
 	for _, agent := range agents {
 		agent.Start()
 	}
-	return startCroneJobs()
+
+	err = startCroneJobs()
+	if err != nil {
+		return err
+	}
+
+	registerInternalCommands()
+	err = command.RegisterExternal()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 
@@ -56,8 +77,10 @@ func Shutdown() {
 	agents = nil
 	croneJobs = nil
 	cfg = nil
+	tool.ClearRegistry()
+	platform.ClearRegistry()
+	command.ClearRegistry()
 }
-
 
 
 func loadConfigs() error {
@@ -72,11 +95,6 @@ func loadConfigs() error {
 		return fmt.Errorf("error loading tool config: %v", err)
 	}
 
-	err = tool.RegisterExternal()
-	if err != nil {
-		return fmt.Errorf("error registering external tool: %v", err)
-	}
-
 	err = platform.LoadPlatformConfig(PlatformConfigPath)
 	if err != nil {
 		return fmt.Errorf("error loading platform config: %v", err)
@@ -86,6 +104,12 @@ func loadConfigs() error {
 	if err != nil {
 		return fmt.Errorf("error reading %s: %v", EndpointsConfigPath, err)
 	}	
+	
+	registerInternalTools()
+	err = tool.RegisterExternal()
+	if err != nil {
+		return fmt.Errorf("error registering external tool: %v", err)
+	}
 
 	agents, err = agent.LoadAgentsFromDir(AgentsFolderPath, endpoints)
 	if err != nil {
@@ -94,6 +118,34 @@ func loadConfigs() error {
 	return nil
 }
 
+
+func registerInternalTools() {
+	tool.Register(tools.NewBashTool())
+	tool.Register(tools.NewChecklistTool())
+	tool.Register(tools.NewDiscordTool())
+	tool.Register(tools.NewExecuteCodeTool())
+	tool.Register(tools.NewFileEditTool())
+	tool.Register(tools.NewFileReadTool())
+	tool.Register(tools.NewGetTimeTool())
+	tool.Register(tools.NewSearxngTool())
+	tool.Register(tools.NewWebExtractTool())
+	tool.Register(tools.NewSkillTool())
+	tool.Register(tools.NewSubagentTool())
+	tool.Register(tools.NewViewImageTool())
+}
+
+
+func registerInternalPlatforms() {
+	platform.Register(platforms.NewDiscord())
+}
+
+
+func registerInternalCommands() {
+	command.Register(commands.NewHelpCommand())
+	command.Register(commands.NewClearCommand())
+	command.Register(commands.NewCompressCommand())
+	command.Register(commands.NewInterruptCommand())
+}
 
 // initilaizes the subagnent tools with the right agent references
 func initSubagentTool() {
@@ -105,6 +157,8 @@ func initSubagentTool() {
 	}
 	tools.SetSubagents(subagentList)
 }
+
+
 
 // initializes platforms
 func initPlatforms() {

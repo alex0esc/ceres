@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -17,7 +18,22 @@ import (
 // SubagentTool bundles listing available subagents and submitting tasks
 // to them into a single tool, dispatched via the "action" parameter
 // ("list" or "call").
-type SubagentTool struct{}
+type SubagentTool struct {
+	timeout time.Duration
+}
+
+// NewSubagentTool constructs a SubagentTool, reading all relevant config
+// values once up front.
+func NewSubagentTool() *SubagentTool {
+	timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", "1h"))
+	if err != nil {
+		log.Fatal("Could not read subagent.timeout from tool config!")
+	}
+
+	return &SubagentTool{
+		timeout: timeout,
+	}
+}
 
 func (t *SubagentTool) Name() string {
 	return "subagent"
@@ -102,7 +118,7 @@ func (t *SubagentTool) Handler() tool.ToolHandler {
 			if len(args.Tasks) == 0 {
 				return "", fmt.Errorf("subagent: 'tasks' is required and must contain at least 1 entry when action='call'")
 			}
-			return subagentCall(args.Tasks, handle)
+			return t.subagentCall(args.Tasks, handle)
 		case "":
 			return "", fmt.Errorf("subagent: 'action' is required (must be 'list' or 'call')")
 		default:
@@ -130,7 +146,7 @@ func subagentList(handle handles.AgentHandle) (string, error) {
 
 // subagentCall submits every task up front so they all run concurrently,
 // then waits for all results and formats them into a single string.
-func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string, error) {
+func (t *SubagentTool) subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string, error) {
 	// Step 1: submit every task up front so they all run concurrently.
 	pending := make([]pendingCall, 0, len(tasks))
 	for _, task := range tasks {
@@ -149,11 +165,7 @@ func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string,
 			})
 			continue
 		}
-		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", "1h"))
-		if err != nil {
-			log.Fatal("Could not read subagent.timeout from tool config!")
-		}
-		sub_task := handles.TaskClearAsk(task.Task, timeout)
+		sub_task := handles.TaskClearAsk(task.Task, t.timeout)
 		ch := agnt.SubmitTask(&sub_task)
 		pending = append(pending, pendingCall{
 			agentName: task.Agent,
@@ -183,8 +195,4 @@ func subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string,
 		}
 	}
 	return sb.String(), nil
-}
-
-func init() {
-	tool.Register(&SubagentTool{})
 }

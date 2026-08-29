@@ -9,12 +9,12 @@ import (
 )
 
 
-func init() {
-	command.Register(command.Command{
+func NewHelpCommand() command.Command {
+	return command.Command{
 		Name:        "help",
-		Description: "Show this help message.",
+		Description: "Show a help message how to use other commands.",
 		Handler:     handleHelp,
-	})
+	}
 }
 
 

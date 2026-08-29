@@ -4,7 +4,7 @@ package tool
 import (
 )
 
-// HINT this function is meant for tools that to access the toolconfig during registration
+// register all external tools here tool.Register(tool.NewTool())
 func RegisterExternal() error {
 	return nil
 }

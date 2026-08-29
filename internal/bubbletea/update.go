@@ -141,11 +141,11 @@ func (tui *Tui) applyListSelection() {
 			old.Client.ClearOnEvent()
 		}
 		tui.selectedAgent = app.GetAgent(selected.botName)
-		tui.loadAgentHistory()
-		tui.viewport.SetContent(tui.getContentString())
 		tui.selectedAgent.Client.SetOnEvent(func(token history.Token) {
 			tui.inputChan <- token
 		})
+		tui.loadAgentHistory()
+		tui.viewport.SetContent(tui.getContentString())
 	}
 }
 

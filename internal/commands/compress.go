@@ -9,12 +9,12 @@ import (
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
-func init() {
-	command.Register(command.Command{
+func NewCompressCommand() command.Command {
+	return command.Command{
 		Name:        "cmp",
 		Description: "Compress the chat history of the selected agent.",
 		Handler:     handleCompress,
-	})
+	}
 }
 
 func handleCompress(agnt handles.AgentHandle, args []string) string {

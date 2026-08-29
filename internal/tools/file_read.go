@@ -15,21 +15,48 @@ import (
 )
 
 // FileReadTool reads a file inside the sandbox container and returns its content with line numbers
-type FileReadTool struct{}
+type FileReadTool struct {
+	containerName string
+	timeout       time.Duration
+	maxSize       int64
+}
+
+// NewFileReadTool constructs a FileReadTool, reading all relevant config
+// values once up front.
+func NewFileReadTool() FileReadTool {
+	cfg := tool.GetToolConfig()
+
+	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
+
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.timeout", "120s"))
+	if err != nil {
+		panic(fmt.Errorf("file_read: error while parsing sandbox.timeout in toolconfig.toml"))
+	}
+	if timeout <= 0 {
+		panic(fmt.Errorf("file_read: sandbox.timeout must be positive"))
+	}
+
+	var defSize int64 = 1024 * 40
+	maxSize := config.ReadEntry(cfg, "file_read.max_size_b", defSize)
+
+	return FileReadTool{
+		containerName: containerName,
+		timeout:       timeout,
+		maxSize:       maxSize,
+	}
+}
 
 func (FileReadTool) Name() string {
 	return "file_read"
 }
 
-func (FileReadTool) Description() string {
-	var def_size int64 = 1024 * 40
-	maxSize := config.ReadEntry(tool.GetToolConfig(), "file_read.max_size_b", def_size)
+func (t FileReadTool) Description() string {
 	return fmt.Sprintf(
 		"Reads a file inside the sandbox container and returns its content with each line prefixed by its line number "+
 			"(format: \"<line_number>: <content>\"). Use the line numbers to target specific lines with file-editing tools. "+
 			"Optionally provide 'start_line' and/or 'end_line' (1-based, inclusive) to only return a slice of the file "+
 			"instead of the full content; Files larger than %d bytes are rejected.",
-		maxSize,
+		t.maxSize,
 	)
 }
 
@@ -55,7 +82,7 @@ func (FileReadTool) Parameters() map[string]any {
 	}
 }
 
-func (FileReadTool) Handler() tool.ToolHandler {
+func (t FileReadTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Path      string `json:"path"`
@@ -75,26 +102,14 @@ func (FileReadTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("file_read: start_line (%d) must not be greater than end_line (%d)", args.StartLine, args.EndLine)
 		}
 
-		containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
-		timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-		if err != nil {
-			return "", fmt.Errorf("file_read: error while parsing sandbox.timeout in toolconfig.toml")
-		}
-		if timeout <= 0 {
-			return "", fmt.Errorf("file_read: sandbox.timeout must be positive")
-		}
-
-		var def_size int64 = 1024 * 40
-		maxSize := config.ReadEntry(tool.GetToolConfig(), "file_read.max_size_b", def_size)
-
 		cli := getDockerClient()
 
 		// Check the file size before reading it fully, so an oversized or
 		// otherwise unusual file (huge log, device file, etc.) never gets
 		// pulled entirely into memory just to be rejected afterwards.
-		statCtx, statCancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		statCmd := fmt.Sprintf("stat -c %%s -- %s", shellQuote(args.Path))
-		statOut, statErr, statExit, err := runInContainer(statCtx, cli, containerName, statCmd)
+		statOut, statErr, statExit, err := runInContainer(statCtx, cli, t.containerName, statCmd)
 		statCancel()
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to stat file in sandbox: %w", err)
@@ -106,17 +121,17 @@ func (FileReadTool) Handler() tool.ToolHandler {
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to parse file size %q: %w", strings.TrimSpace(statOut), err)
 		}
-		if size > maxSize {
-			return "", fmt.Errorf("file_read: file is %d bytes, which exceeds the configured limit of %d bytes", size, maxSize)
+		if size > t.maxSize {
+			return "", fmt.Errorf("file_read: file is %d bytes, which exceeds the configured limit of %d bytes", size, t.maxSize)
 		}
 
-		execCtx, cancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
 		// "cat" is used instead of the docker SDK's file-copy API so we can
 		// reuse the existing exec plumbing (runInContainer) and get a clear
 		// stderr/exit code if the file is missing or unreadable.
 		cmd := fmt.Sprintf("cat -- %s", shellQuote(args.Path))
-		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, containerName, cmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, cmd)
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to read file from sandbox: %w", err)
 		}
@@ -182,8 +197,4 @@ func sliceNumberedLines(numbered string, start, end int) (string, error) {
 	}
 
 	return strings.Join(lines[start-1:end], "\n"), nil
-}
-
-func init() {
-	tool.Register(FileReadTool{})
 }
