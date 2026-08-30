@@ -33,12 +33,12 @@ func NewViewImageTool() ViewImageTool {
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
 	// Use the same timeout configured for sandbox commands.
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.timeout", "120s"))
 	if err != nil {
-		panic(fmt.Errorf("view_image: error while parsing sandbox.bash.timeout in toolconfig.toml: %w", err))
+		panic(fmt.Errorf("view_image: error while parsing sandbox.timeout in toolconfig.toml: %w", err))
 	}
 	if timeout <= 0 {
-		panic(fmt.Errorf("view_image: sandbox.bash.timeout must be positive"))
+		panic(fmt.Errorf("view_image: sandbox.timeout must be positive"))
 	}
 
 	var defSize int64 = 4096
