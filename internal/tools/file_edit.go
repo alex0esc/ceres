@@ -28,9 +28,9 @@ type FileEditTool struct {
 func NewFileEditTool() FileEditTool {
 	cfg := tool.GetToolConfig()
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.bash.timeout", "60s"))
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.timeout", "120s"))
 	if err != nil {
-		panic(fmt.Errorf("file_edit: error while parsing sandbox.bash.timeout in toolconfig.toml: %w", err))
+		panic(fmt.Errorf("file_edit: error while parsing sandbox.timeout in toolconfig.toml: %w", err))
 	}
 
 	return FileEditTool{

@@ -30,7 +30,7 @@ func NewExecuteCodeTool() ExecuteCodeTool {
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "execute_code.timeout", "30s"))
+	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "execute_code.timeout", "180s"))
 	if err != nil {
 		panic(fmt.Errorf("execute_code: error while parsing execute_code.timeout in toolconfig.toml"))
 	}
@@ -54,9 +54,9 @@ func (ExecuteCodeTool) Name() string {
 
 func (t ExecuteCodeTool) Description() string {
 	return fmt.Sprintf(
-		"Executes a short Python 3 code snippet inside the sandbox container and returns stdout, stderr, and the exit code. "+
-			"Use this for on-demand calculations, quick data processing, or logic checks — not for long-running or interactive scripts. "+
-			"The snippet has no persistent state between calls (each execution is a fresh process); print() whatever result you need to see. "+
+		"Executes a short Python 3 code snippet inside the sandbox container and returns stdout, stderr, and the exit code. " +
+			"Use this for on-demand calculations, quick data processing, or logic checks — not for long-running or interactive scripts. " +
+			"The snippet has no persistent state between calls (each execution is a fresh process); print() whatever result you need to see. " +
 			"Combined stdout+stderr output larger than %d bytes will be truncated.",
 		t.maxOutput,
 	)
