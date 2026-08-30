@@ -1,10 +1,10 @@
 package cronjob
 
-
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/robfig/cron/v3"
@@ -16,7 +16,7 @@ type CronJobConfig struct {
 	Name      string   `toml:"name"`
 	AgentName string   `toml:"agent_name"`
 	Times     []string `toml:"times"`
-	Prompt    string   `toml:"prompt"`
+	Prompts   []string `toml:"prompts"`
 	Timeout   string   `toml:"timeout,omitempty"`
 }
 
@@ -33,12 +33,10 @@ func LoadCronJobsFromFile(path string) ([]CronJobConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var file CronJobsFile
 	if _, err := toml.DecodeFile(path, &file); err != nil {
 		return nil, fmt.Errorf("failed to decode cron jobs config %q: %w", path, err)
 	}
-
 	for i, job := range file.Jobs {
 		if job.Name == "" {
 			return nil, fmt.Errorf("invalid cron job at index %d: missing name", i)
@@ -49,15 +47,17 @@ func LoadCronJobsFromFile(path string) ([]CronJobConfig, error) {
 		if len(job.Times) == 0 {
 			return nil, fmt.Errorf("cron job %q: missing at least one entry in times", job.Name)
 		}
-		if job.Prompt == "" {
-			return nil, fmt.Errorf("cron job %q: missing prompt", job.Name)
+		if len(job.Prompts) == 0 {
+			return nil, fmt.Errorf("cron job %q: missing at least one entry in prompts", job.Name)
 		}
 		// Validate timeout syntax if provided (e.g. "5m", "10s", "1h")
 		if job.Timeout == "" {
-			return nil, fmt.Errorf("cron job %q: missing timeout duration %q: %w", job.Name, job.Timeout, err)
+			return nil, fmt.Errorf("cron job %q: missing timeout duration", job.Name)
+		}
+		if _, err := time.ParseDuration(job.Timeout); err != nil {
+			return nil, fmt.Errorf("cron job %q: invalid timeout duration %q: %w", job.Name, job.Timeout, err)
 		}
 	}
-
 	return file.Jobs, nil
 }
 
@@ -91,32 +91,27 @@ func EnsureDefaultCronJobsFile(path string) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to stat cron jobs config %q: %w", path, err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create cron jobs directory: %w", err)
 	}
-
 	cfg := CronJobsFile{
 		Jobs: []CronJobConfig{
 			{
 				Name:      "portfolio-check",
 				AgentName: "Ceres",
 				Times:     []string{"0 9 * * 1-5"},
-				Prompt:    "Check all stocks in the portfolio and decide whether to buy, sell, or hold based on the latest news.",
+				Prompts:   []string{"Check all stocks in the portfolio and decide whether to buy, sell, or hold based on the latest news."},
 				Timeout:   "20m",
 			},
 		},
 	}
-
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create default cron jobs file: %w", err)
 	}
 	defer f.Close()
-
 	if err := toml.NewEncoder(f).Encode(cfg); err != nil {
 		return fmt.Errorf("failed to write default cron jobs file: %w", err)
 	}
-
 	return nil
 }

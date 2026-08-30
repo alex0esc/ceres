@@ -25,6 +25,7 @@ func (s AgentState) String() string {
 
 // result returned by submitTask
 type TaskResult struct {
+	Interrupted bool
 	Response *history.History
 	Err      error
 }

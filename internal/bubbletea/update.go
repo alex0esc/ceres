@@ -2,12 +2,10 @@ package bubbletea
 
 import (
 	"log"
-	"time"
 
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/command"
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -107,11 +105,7 @@ func (tui *Tui) submitMessage() {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
 		if !cmd {
 			tui.selectedAgent.Client.Interrupt()
-			timeout, err := time.ParseDuration(config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", "60m"))
-			if err != nil {
-				log.Fatalf("error while parsing tui_timeout in server config: %v", err)
-			}
-			task := handles.TaskAsk(input, timeout)
+			task := handles.TaskAskSimple(input, tui.messageTimeout)
 			res := agnt.SubmitTask(&task)
 			go func() {
 				err := (<-res).Err
@@ -183,7 +177,9 @@ func (tui *Tui) handleTokenMsg(token history.Token) {
 	case history.TokenEndOfSequence:
 		tui.mergeTokens()
 	default:
-		tui.tokens = append(tui.tokens, token)
+		if token.Type != history.TokenTypeReasoning || tui.showReasoning { 
+			tui.tokens = append(tui.tokens, token)
+		}
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.viewport.GotoBottom()

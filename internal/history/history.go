@@ -56,3 +56,6 @@ func (history *History) Filter(types ...EntryType) *History {
 	return filtered
 }
 
+func (history *History) LastEntry() *Entry {
+	return &history.Entries[len(history.Entries) - 1]
+}

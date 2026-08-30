@@ -131,7 +131,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		s.ChannelMessageSend(m.ChannelID, msg)
 		return
 	}
-	task := handles.TaskAsk(m.Content, d.messageTimeout)
+	task := handles.TaskAskSimple(m.Content, d.messageTimeout)
 	resultCh := agent.SubmitTask(&task)
 	result := <-resultCh
 	close(stopTyping)

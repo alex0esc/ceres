@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -19,19 +18,25 @@ import (
 // to them into a single tool, dispatched via the "action" parameter
 // ("list" or "call").
 type SubagentTool struct {
+	summarizePrompt string
 	timeout time.Duration
 }
 
 // NewSubagentTool constructs a SubagentTool, reading all relevant config
 // values once up front.
 func NewSubagentTool() *SubagentTool {
+
 	timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", "1h"))
 	if err != nil {
 		log.Fatal("Could not read subagent.timeout from tool config!")
 	}
 
+
 	return &SubagentTool{
 		timeout: timeout,
+		summarizePrompt: config.ReadEntry(tool.GetToolConfig(), "subagent.summarize_prompt",
+			"Summerize all actions and results that have been achieved in the current chat session for the orchestrator agent. " +
+			"IMPORTANT: The summary should contain everything that is needed by the orchestrator agent to evaluate your work!"),
 	}
 }
 
@@ -40,13 +45,14 @@ func (t *SubagentTool) Name() string {
 }
 
 func (t *SubagentTool) Description() string {
-	return "Lists available subagents or submits tasks to them. " +
-		"Use action='list' to see all available subagents together with their descriptions and current status " +
+	return "Use action='list' to see all available subagents together with their descriptions and current status " +
 		"(use this first, before calling any subagents). " +
-		"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel and wait until all " +
-		"of them have finished. A subagent does not remember what it did before, so the full context must be " +
-		"provided in each task. A busy subagent is still callable, but its task may be queued and takes longer." +
-		"Its also possible to submit multiple tasks at once to one subagent, all tasks will be queue and executed."
+		"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel. This blocks until all " +
+		"of them have finished. Each task may contain multiple prompts, which are sent to the subagent one after " +
+		"another in order. A subagent does not remember the task it did before, however it does remember its last promt and the answer it gave. " +
+		"Because of that promts are for splitting a longer complex task into smaller subtasks, so the subagent does not get lost. " + 
+		"A busy subagent is still callable, but its task will be queued and the response will take longer. " +
+		"IMPORTANT: The returned message you get form a subagent is not what he exactly generated, its a summary of his results/actions!"
 }
 
 func (t *SubagentTool) Parameters() map[string]any {
@@ -61,7 +67,7 @@ func (t *SubagentTool) Parameters() map[string]any {
 			"tasks": map[string]any{
 				"type": "array",
 				"description": "Required for action='call': list of tasks to submit, must contain at least 1 entry. " +
-					"Ignored for action='list'.",
+					"The agent does not remember what he did in the last Task! (Ignored for action='list')",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -69,12 +75,15 @@ func (t *SubagentTool) Parameters() map[string]any {
 							"type":        "string",
 							"description": "Name of the subagent that should run this task.",
 						},
-						"task": map[string]any{
-							"type":        "string",
-							"description": "The task/instruction to send to the subagent.",
+						"prompts": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "string",
+							},
+							"description": "One or more prompts to send to the subagent in order, must contain at least 1 entry.",
 						},
 					},
-					"required":             []string{"agent", "task"},
+					"required":             []string{"agent", "prompts"},
 					"additionalProperties": false,
 				},
 			},
@@ -85,8 +94,8 @@ func (t *SubagentTool) Parameters() map[string]any {
 }
 
 type subagentCallTask struct {
-	Agent string `json:"agent"`
-	Task  string `json:"task"`
+	Agent   string   `json:"agent"`
+	Prompts []string `json:"prompts"`
 }
 
 type subagentToolArgs struct {
@@ -118,7 +127,7 @@ func (t *SubagentTool) Handler() tool.ToolHandler {
 			if len(args.Tasks) == 0 {
 				return "", fmt.Errorf("subagent: 'tasks' is required and must contain at least 1 entry when action='call'")
 			}
-			return t.subagentCall(args.Tasks, handle)
+			return t.subagentCall(ctx, args.Tasks, handle)
 		case "":
 			return "", fmt.Errorf("subagent: 'action' is required (must be 'list' or 'call')")
 		default:
@@ -146,7 +155,7 @@ func subagentList(handle handles.AgentHandle) (string, error) {
 
 // subagentCall submits every task up front so they all run concurrently,
 // then waits for all results and formats them into a single string.
-func (t *SubagentTool) subagentCall(tasks []subagentCallTask, handle handles.AgentHandle) (string, error) {
+func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTask, handle handles.AgentHandle) (string, error) {
 	// Step 1: submit every task up front so they all run concurrently.
 	pending := make([]pendingCall, 0, len(tasks))
 	for _, task := range tasks {
@@ -154,6 +163,13 @@ func (t *SubagentTool) subagentCall(tasks []subagentCallTask, handle handles.Age
 			pending = append(pending, pendingCall{
 				agentName: task.Agent,
 				err:       fmt.Errorf("agents calls itself %q", task.Agent),
+			})
+			continue
+		}
+		if len(task.Prompts) == 0 {
+			pending = append(pending, pendingCall{
+				agentName: task.Agent,
+				err:       fmt.Errorf("task for agent %q must contain at least 1 prompt", task.Agent),
 			})
 			continue
 		}
@@ -165,7 +181,14 @@ func (t *SubagentTool) subagentCall(tasks []subagentCallTask, handle handles.Age
 			})
 			continue
 		}
-		sub_task := handles.TaskClearAsk(task.Task, t.timeout)
+
+
+		prompts := make([]string, len(task.Prompts), len(task.Prompts)+1)
+		copy(prompts, task.Prompts)
+		prompts = append(prompts, t.summarizePrompt)
+		sub_task := handles.TaskClearAskMultiple(prompts, t.timeout)
+		sub_task.ParentCtx = ctx
+
 		ch := agnt.SubmitTask(&sub_task)
 		pending = append(pending, pendingCall{
 			agentName: task.Agent,
@@ -184,12 +207,16 @@ func (t *SubagentTool) subagentCall(tasks []subagentCallTask, handle handles.Age
 		}
 		result := <-p.ch
 		if result.Err != nil {
-			fmt.Fprintf(&sb, "error: %v\n\n", result.Err)
+			fmt.Fprintf(&sb, "Agent returned an error: %v\n\n", result.Err)
 			continue
 		}
-		filtered := result.Response.Filter(history.EntryTypeAssistent, history.EntryTypeToolCall)
+		if result.Interrupted {
+			fmt.Fprintf(&sb, "Agent was interrupted!")
+			continue
+		}
+		filtered := result.Response.Filter(history.EntryTypeAssistent)
 		if len(filtered.Entries) > 0 {
-			fmt.Fprintf(&sb, "%s\n\n", filtered.String())
+			fmt.Fprintf(&sb, "%s\n\n", filtered.LastEntry().String())
 		} else {
 			fmt.Fprintf(&sb, "Agent returned an empty result!")
 		}

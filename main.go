@@ -61,7 +61,10 @@ func main() {
 		switch scanner.Text() {
 		case "tui":
 			log.SetOutput(tuiWriter)
-			tui := bubbletea.RunTui()
+			tui, err := bubbletea.RunTui()
+			if err != nil {
+				log.Fatalf("error could not start tui: %v", err)
+			}
 			tui.Wait()
 			log.SetOutput(cliWriter)
 		case "reload":
