@@ -95,7 +95,9 @@ func (tui *Tui) loadAgentHistory() {
 		case history.EntryTypeToolCall:
 			tui.appendSystemMessage(entry.String())
 		case history.EntryTypeReasoning:
-			tui.appendReasoningMessage(entry.String())
+			if tui.showReasoning {
+				tui.appendReasoningMessage(entry.String())
+			}
 		}
 	}
 	tui.selectedAgent.Client.CatchUpOnEvent()

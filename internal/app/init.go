@@ -121,7 +121,6 @@ func loadConfigs() error {
 
 func registerInternalTools() {
 	tool.Register(tools.NewBashTool())
-	tool.Register(tools.NewChecklistTool())
 	tool.Register(tools.NewDiscordTool())
 	tool.Register(tools.NewExecuteCodeTool())
 	tool.Register(tools.NewFileEditTool())
@@ -189,7 +188,7 @@ func startCroneJobs() error {
 	},
 	func(job cronjob.CronJobConfig) {
 		timeout, _ := time.ParseDuration(job.Timeout)
-		task := handles.TaskAsk(job.Prompt, timeout)
+		task := handles.TaskClearAskMultiple(job.Prompts, timeout)
 		res := <- agents[job.AgentName].SubmitTask(&task)
 		if res.Err != nil {
 			log.Printf("error while executing chrone job: %v", res.Err)

@@ -1,7 +1,7 @@
 package bubbletea
 
 import (
-	"log"
+	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/history"
@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 )
-
 
 // focused componen saved as number
 type focusState int
@@ -35,6 +34,10 @@ type Tui struct {
 
 	selectedAgent *agent.Agent
 
+	//config
+	messageTimeout time.Duration
+	showReasoning  bool
+
 	//current text
 	messages []string
 	tokens   []history.Token
@@ -45,16 +48,22 @@ type Tui struct {
 
 
 //runs the tui and return the tea.programm to send information and exit tui
-func RunTui() *tea.Program {
+func RunTui() (*tea.Program, error) {
+	initial, err := initialTui()
+	if err != nil {
+		return nil, err
+	}
+
 	program := tea.NewProgram(
-		initialTui(),
+		initial,
 		tea.WithAltScreen(), // make it full screen
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := program.Run(); err != nil {
-		log.Fatalf("could not start TUI: %v+", err)
+	_, err = program.Run()
+	if err != nil {
+		return nil, err
 	}
 
-	return program
+	return program, nil
 }

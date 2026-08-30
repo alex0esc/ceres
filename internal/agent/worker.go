@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -47,33 +46,26 @@ func (agent *Agent) worker() {
 			case handles.TaskTypeClear:
 				agent.Client.ClearHistory()
 				t.ResultCh <- handles.TaskResult{Response: nil, Err: nil}
-			case handles.TaskTypeAsk:
+			case handles.TaskTypeAsk, handles.TaskTypeClearAsk:
+				if t.Tasktype == handles.TaskTypeClearAsk {
+					agent.Client.ClearHistory()
+				}
 				var fullResp *history.History = &history.History{}
-				resp, err := agent.Client.AskStream(runCtx, t.Prompt, agent)
-				if err != nil {
-					t.ResultCh <- handles.TaskResult{Response: resp, Err: err}
-					goto Done
-				}
-				fullResp.Append(resp)
-				for {
-					if err = runCtx.Err(); err != nil {
-						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
+				for _, promt := range t.Prompts {
+					resp, err, interrupted := agent.Client.AskStream(runCtx, promt, agent)
+					if interrupted {
+						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: nil, Interrupted: true }
 						goto Done
 					}
-					remaining := t.CheckRemaining()
-					if len(remaining) <= 0 {
-						break	
-					}
-					resp, err = agent.Client.AskStream(runCtx,
-						fmt.Sprintf("[System] Checklist is not finished, remaining tasks are: %s", quoteJoin(remaining)), agent)
 					if err != nil {
-						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
+						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err, Interrupted: false }
 						goto Done
 					}
-				}
-				t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err}
-			}
 
+					fullResp.Append(resp)				
+				}
+				t.ResultCh <- handles.TaskResult{Response: fullResp, Err: nil, Interrupted: false}
+			}
 			Done:
 			cancel()
 			agent.currentTask = nil
@@ -126,12 +118,4 @@ func withAgent(ctx context.Context, name string) context.Context {
 func inChain(ctx context.Context, name string) bool {
 	chain, _ := ctx.Value(callChainKey{}).([]string)
 	return slices.Contains(chain, name)
-}
-
-func quoteJoin(items []string) string {
-	quoted := make([]string, len(items))
-	for i, s := range items {
-		quoted[i] = fmt.Sprintf("%q", s)
-	}
-	return strings.Join(quoted, ", ")
 }

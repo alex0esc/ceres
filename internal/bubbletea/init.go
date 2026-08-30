@@ -1,9 +1,13 @@
 package bubbletea
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -88,15 +92,21 @@ func newTextArea() textarea.Model {
 	return ta
 }
 
-func initialTui() *Tui {
-	
+func initialTui() (*Tui, error) {
+	timeout, err := time.ParseDuration(config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", "60m"))
+	if err != nil {
+		return nil, fmt.Errorf("error while parsing tui_timeout in server config: %v", err)
+	}
+
 	return &Tui{
 		textarea: newTextArea(),
 		list:      newList(app.GetAgentList()),
 		focus:     focusInput,
 		inputChan: make(chan history.Token, 128),
 		selectedAgent: nil,
-	}
+		messageTimeout: timeout,
+		showReasoning: config.ReadEntry(app.GetAppConfig(), "tui.show_reasoning", true),
+	}, nil
 }
 
 func (tui *Tui) Init() tea.Cmd {
