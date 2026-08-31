@@ -18,7 +18,7 @@ import (
 )
 
 //direcotry where all skills are stored
-var skillBaseDir string
+var memoryBaseDir string
 
 //all subagents needed for subagent tools
 var subAgents map[string]handles.AgentHandle = nil
@@ -27,8 +27,8 @@ var subAgents map[string]handles.AgentHandle = nil
 var dockerClient *client.Client = nil
 
 
-func SetSkillDir(path string) {
-	skillBaseDir = path
+func SetMemoryDir(path string) {
+	memoryBaseDir = path
 }
 
 

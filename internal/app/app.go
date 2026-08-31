@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/cronjob"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/robfig/cron/v3"
@@ -13,7 +14,8 @@ import (
 
 var endpoints map[string]inference.Endpoint	
 var agents map[string]*agent.Agent
-var croneJobs *cron.Cron
+var cronJobs map[string]*cronjob.CronJob
+var cronLib *cron.Cron
 var cfg *config.Config
 
 
