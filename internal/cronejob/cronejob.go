@@ -20,45 +20,61 @@ type CronJobConfig struct {
 	Timeout   string   `toml:"timeout,omitempty"`
 }
 
-// CronJobsFile is the top-level structure of chronejobs.toml: a list of jobs
-// under the "jobs" array-of-tables key ([[jobs]]).
+// CronJobsFile is the top-level structure of chronejobs.toml: a global
+// location for all jobs, plus a list of jobs under the "jobs" array-of-tables
+// key ([[jobs]]).
 type CronJobsFile struct {
-	Jobs []CronJobConfig `toml:"jobs"`
+	Location string          `toml:"location,omitempty"`
+	Jobs     []CronJobConfig `toml:"jobs"`
 }
 
-// LoadCronJobsFromFile reads chronejobs.toml from DefaultCronJobsPath and
-// returns the parsed, validated list of job configs.
-func LoadCronJobsFromFile(path string) ([]CronJobConfig, error) {
+// DefaultLocation is used when no location is set in the config file.
+const DefaultLocation = "Local"
+
+// LoadCronJobsFromFile reads chronejobs.toml from path and returns the
+// parsed, validated list of job configs together with the shared
+// *time.Location that all schedules should be interpreted in.
+func LoadCronJobsFromFile(path string) ([]CronJobConfig, *time.Location, error) {
 	err := EnsureDefaultCronJobsFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var file CronJobsFile
 	if _, err := toml.DecodeFile(path, &file); err != nil {
-		return nil, fmt.Errorf("failed to decode cron jobs config %q: %w", path, err)
+		return nil, nil, fmt.Errorf("failed to decode cron jobs config %q: %w", path, err)
 	}
+
+	locName := file.Location
+	if locName == "" {
+		locName = DefaultLocation
+	}
+	loc, err := time.LoadLocation(locName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cron jobs config %q: invalid location %q: %w", path, locName, err)
+	}
+
 	for i, job := range file.Jobs {
 		if job.Name == "" {
-			return nil, fmt.Errorf("invalid cron job at index %d: missing name", i)
+			return nil, nil, fmt.Errorf("invalid cron job at index %d: missing name", i)
 		}
 		if job.AgentName == "" {
-			return nil, fmt.Errorf("cron job %q: missing agent_name", job.Name)
+			return nil, nil, fmt.Errorf("cron job %q: missing agent_name", job.Name)
 		}
 		if len(job.Times) == 0 {
-			return nil, fmt.Errorf("cron job %q: missing at least one entry in times", job.Name)
+			return nil, nil, fmt.Errorf("cron job %q: missing at least one entry in times", job.Name)
 		}
 		if len(job.Prompts) == 0 {
-			return nil, fmt.Errorf("cron job %q: missing at least one entry in prompts", job.Name)
+			return nil, nil, fmt.Errorf("cron job %q: missing at least one entry in prompts", job.Name)
 		}
 		// Validate timeout syntax if provided (e.g. "5m", "10s", "1h")
 		if job.Timeout == "" {
-			return nil, fmt.Errorf("cron job %q: missing timeout duration", job.Name)
+			return nil, nil, fmt.Errorf("cron job %q: missing timeout duration", job.Name)
 		}
 		if _, err := time.ParseDuration(job.Timeout); err != nil {
-			return nil, fmt.Errorf("cron job %q: invalid timeout duration %q: %w", job.Name, job.Timeout, err)
+			return nil, nil, fmt.Errorf("cron job %q: invalid timeout duration %q: %w", job.Name, job.Timeout, err)
 		}
 	}
-	return file.Jobs, nil
+	return file.Jobs, loc, nil
 }
 
 // RegisterCronJobs adds every job's schedules to the given cron.Cron instance.
@@ -82,9 +98,9 @@ func RegisterCronJobs(c *cron.Cron, jobs []CronJobConfig, checker func(CronJobCo
 	return nil
 }
 
-// EnsureDefaultCronJobsFile creates a chronejobs.toml with one example job
-// if no such file exists yet at path. Mirrors EnsureOneAgentFile's behavior
-// for agent configs.
+// EnsureDefaultCronJobsFile creates a chronejobs.toml with a default
+// location and one example job if no such file exists yet at path. Mirrors
+// EnsureOneAgentFile's behavior for agent configs.
 func EnsureDefaultCronJobsFile(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil // file already exists, nothing to do
@@ -95,6 +111,7 @@ func EnsureDefaultCronJobsFile(path string) error {
 		return fmt.Errorf("failed to create cron jobs directory: %w", err)
 	}
 	cfg := CronJobsFile{
+		Location: "Europe/Berlin",
 		Jobs: []CronJobConfig{
 			{
 				Name:      "portfolio-check",

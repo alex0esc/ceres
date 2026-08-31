@@ -169,9 +169,9 @@ func initPlatforms() {
 
 // starts all chrone jobs 
 func startCroneJobs() error {
-	croneJobs = cron.New()
+	jobs, loc, err := cronjob.LoadCronJobsFromFile(CronJobsConfigPath)
+	croneJobs = cron.New(cron.WithLocation(loc))
 
-	jobs, err := cronjob.LoadCronJobsFromFile(CronJobsConfigPath)
 	if err != nil {
 		return err
 	}
