@@ -27,7 +27,7 @@ func  Start() error {
 		return err
 	}
 
-	tools.SetSkillDir(SkillFolderPath)
+	tools.SetMemoryDir(MemoryFolderPath)
 	initSubagentTool()
 	err = tools.InitDockerClient()
 	if err != nil {
@@ -127,7 +127,8 @@ func registerInternalTools() {
 	tool.Register(tools.NewGetTimeTool())
 	tool.Register(tools.NewSearxngTool())
 	tool.Register(tools.NewWebExtractTool())
-	tool.Register(tools.NewSkillTool())
+	tool.Register(tools.NewMemoryReadTool())
+	tool.Register(tools.NewMemoryEditTool())
 	tool.Register(tools.NewSubagentTool())
 	tool.Register(tools.NewViewImageTool())
 }
