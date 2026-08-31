@@ -2,18 +2,16 @@ package app
 
 import (
 	"fmt"
-	"log"
-	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/commands"
 	_ "github.com/alex0esc/ceres/internal/commands"
+	"github.com/alex0esc/ceres/internal/cronjob"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms"
 	_ "github.com/alex0esc/ceres/internal/platforms"
 	"github.com/robfig/cron/v3"
 
-	"github.com/alex0esc/ceres/internal/cronejob"
 	"github.com/alex0esc/ceres/internal/tools"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -70,12 +68,13 @@ func Shutdown() {
 	for _, plat := range config.ReadEntry(cfg, "active_platforms", []string{}) {
 		platform.Get(plat).StopListen()
 	}
-	ctx := croneJobs.Stop()
+	ctx := cronLib.Stop()
 	<-ctx.Done()
 	tools.CloseDockerClient()
 	endpoints = nil
 	agents = nil
-	croneJobs = nil
+	cronJobs = nil
+	cronLib = nil
 	cfg = nil
 	tool.ClearRegistry()
 	platform.ClearRegistry()
@@ -144,6 +143,7 @@ func registerInternalCommands() {
 	command.Register(commands.NewClearCommand())
 	command.Register(commands.NewCompressCommand())
 	command.Register(commands.NewInterruptCommand())
+	command.Register(commands.NewCronCommand(cronJobs))
 }
 
 // initilaizes the subagnent tools with the right agent references
@@ -167,32 +167,22 @@ func initPlatforms() {
 	}
 }
 
-// starts all chrone jobs 
-func startCroneJobs() error {
-	jobs, loc, err := cronjob.LoadCronJobsFromFile(CronJobsConfigPath)
-	croneJobs = cron.New(cron.WithLocation(loc))
 
+// starts all chrone jobs
+func startCroneJobs() error {
+	jobs, loc, err := cronjob.LoadCronJobsFromFile(CronJobsConfigPath, agents)
 	if err != nil {
 		return err
 	}
-	return cronjob.RegisterCronJobs(croneJobs, jobs, func(job cronjob.CronJobConfig) error {
-		_, ok := agents[job.AgentName]
-		if !ok {
-			return fmt.Errorf("agent %s does not exist", job.AgentName)
-		}
-		_, err := time.ParseDuration(job.Timeout)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-	func(job cronjob.CronJobConfig) {
-		timeout, _ := time.ParseDuration(job.Timeout)
-		task := handles.TaskClearAskMultiple(job.Prompts, timeout)
-		res := <- agents[job.AgentName].SubmitTask(&task)
-		if res.Err != nil {
-			log.Printf("error while executing chrone job: %v", res.Err)
-		}
+	cronLib = cron.New(cron.WithLocation(loc))
+	cronJobs = jobs
 
-	})
+	
+	for _, job := range cronJobs {
+		job.Register(cronLib)	
+	}
+
+	cronLib.Start()
+
+	return nil
 }

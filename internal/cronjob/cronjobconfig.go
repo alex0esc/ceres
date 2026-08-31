@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/robfig/cron/v3"
+	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/pkg/handles"
 )
 
 // CronJobConfig is the on-disk representation of a single cron job entry,
@@ -28,13 +29,10 @@ type CronJobsFile struct {
 	Jobs     []CronJobConfig `toml:"jobs"`
 }
 
-// DefaultLocation is used when no location is set in the config file.
-const DefaultLocation = "Local"
 
-// LoadCronJobsFromFile reads chronejobs.toml from path and returns the
-// parsed, validated list of job configs together with the shared
-// *time.Location that all schedules should be interpreted in.
-func LoadCronJobsFromFile(path string) ([]CronJobConfig, *time.Location, error) {
+// LoadCronJobsFromFile reads chronejobs.toml, validates all entries including agent existence,
+// and returns a map of *CronJob indexed by job name together with the shared *time.Location.
+func LoadCronJobsFromFile(path string, agents map[string]*agent.Agent) (map[string]*CronJob, *time.Location, error) {
 	err := EnsureDefaultCronJobsFile(path)
 	if err != nil {
 		return nil, nil, err
@@ -46,12 +44,14 @@ func LoadCronJobsFromFile(path string) ([]CronJobConfig, *time.Location, error) 
 
 	locName := file.Location
 	if locName == "" {
-		locName = DefaultLocation
+		return nil, nil, fmt.Errorf("failed to load cronejobs config, missing attribute location")
 	}
 	loc, err := time.LoadLocation(locName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cron jobs config %q: invalid location %q: %w", path, locName, err)
 	}
+
+	jobsMap := make(map[string]*CronJob)
 
 	for i, job := range file.Jobs {
 		if job.Name == "" {
@@ -60,43 +60,37 @@ func LoadCronJobsFromFile(path string) ([]CronJobConfig, *time.Location, error) 
 		if job.AgentName == "" {
 			return nil, nil, fmt.Errorf("cron job %q: missing agent_name", job.Name)
 		}
+		// Prüfung, ob der angegebene Agent existiert
+		if _, ok := agents[job.AgentName]; !ok {
+			return nil, nil, fmt.Errorf("cron job %q: agent %q does not exist", job.Name, job.AgentName)
+		}
 		if len(job.Times) == 0 {
 			return nil, nil, fmt.Errorf("cron job %q: missing at least one entry in times", job.Name)
 		}
 		if len(job.Prompts) == 0 {
 			return nil, nil, fmt.Errorf("cron job %q: missing at least one entry in prompts", job.Name)
 		}
-		// Validate timeout syntax if provided (e.g. "5m", "10s", "1h")
 		if job.Timeout == "" {
 			return nil, nil, fmt.Errorf("cron job %q: missing timeout duration", job.Name)
 		}
-		if _, err := time.ParseDuration(job.Timeout); err != nil {
+
+		timeout, err := time.ParseDuration(job.Timeout)
+		if err != nil {
 			return nil, nil, fmt.Errorf("cron job %q: invalid timeout duration %q: %w", job.Name, job.Timeout, err)
 		}
+
+		jobsMap[job.Name] = NewCronJob(
+			job.Name,
+			agents[job.AgentName],
+			job.Times,
+			handles.TaskClearAskMultiple(job.Prompts, timeout),
+			timeout,
+		)
 	}
-	return file.Jobs, loc, nil
+
+	return jobsMap, loc, nil
 }
 
-// RegisterCronJobs adds every job's schedules to the given cron.Cron instance.
-// handler is invoked with the job's config each time one of its schedules
-// fires, so a job with multiple entries in Times can share one handler call
-// signature regardless of which schedule triggered it.
-func RegisterCronJobs(c *cron.Cron, jobs []CronJobConfig, checker func(CronJobConfig) error, handler func(CronJobConfig)) error {
-	for _, job := range jobs {
-		err := checker(job)
-		if err != nil {
-			return fmt.Errorf("invalid cronejob %s detected: %v", job.Name, err)
-		}
-		for _, spec := range job.Times {
-			if _, err := c.AddFunc(spec, func() {
-				handler(job)
-			}); err != nil {
-				return fmt.Errorf("cron job %q: invalid schedule %q: %w", job.Name, spec, err)
-			}
-		}
-	}
-	return nil
-}
 
 // EnsureDefaultCronJobsFile creates a chronejobs.toml with a default
 // location and one example job if no such file exists yet at path. Mirrors
