@@ -106,7 +106,7 @@ func (tui *Tui) submitMessage() {
 		if !cmd {
 			tui.selectedAgent.Client.Interrupt()
 			task := handles.TaskAskSimple(input, tui.messageTimeout)
-			res := agnt.SubmitTask(&task)
+			res := agnt.SubmitTask(task)
 			go func() {
 				err := (<-res).Err
 				if err != nil {

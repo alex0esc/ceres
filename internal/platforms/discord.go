@@ -132,7 +132,7 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		return
 	}
 	task := handles.TaskAskSimple(m.Content, d.messageTimeout)
-	resultCh := agent.SubmitTask(&task)
+	resultCh := agent.SubmitTask(task)
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {

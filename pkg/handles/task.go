@@ -19,7 +19,7 @@ const(
 type Task struct {
 	ParentCtx    context.Context
 	Timeout      time.Duration
-	Prompts       []string
+	Prompts      []string
 	Tasktype     TaskType
 	ResultCh     chan TaskResult
 }
