@@ -31,7 +31,7 @@ func NewCronJob(name string, ag *agent.Agent, times []string, task handles.Task,
 
 // executes the cron job
 func (cj *CronJob) Run() {
-	res := <-cj.agent.SubmitTask(&cj.task)
+	res := <-cj.agent.SubmitTask(cj.task)
 	if res.Err != nil {
 		slog.Error(fmt.Sprintf("error while running crone job %s: %v", cj.name, res.Err))
 	}

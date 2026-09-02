@@ -74,7 +74,7 @@ func (agent *Agent) worker() {
 }
 
 // SubmitTask enqueues a new task and returns a channel that will receive its result.
-func (agent *Agent) SubmitTask(task *handles.Task) <-chan handles.TaskResult {
+func (agent *Agent) SubmitTask(task handles.Task) <-chan handles.TaskResult {
 	resultCh := make(chan handles.TaskResult, 1)
 
 	if inChain(task.ParentCtx, agent.name) {
@@ -94,7 +94,7 @@ func (agent *Agent) SubmitTask(task *handles.Task) <-chan handles.TaskResult {
 		resultCh <- handles.TaskResult{Err: errors.New("agent is stopped")}
 		return resultCh
 	}
-	agent.queue = append(agent.queue, task)
+	agent.queue = append(agent.queue, &task)
 	agent.mutex.Unlock()
 
 	// wake up the worker; non-blocking, since the worker drains the whole queue once woken

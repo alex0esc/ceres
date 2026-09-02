@@ -189,7 +189,7 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 		sub_task := handles.TaskClearAskMultiple(prompts, t.timeout)
 		sub_task.ParentCtx = ctx
 
-		ch := agnt.SubmitTask(&sub_task)
+		ch := agnt.SubmitTask(sub_task)
 		pending = append(pending, pendingCall{
 			agentName: task.Agent,
 			ch:        ch,

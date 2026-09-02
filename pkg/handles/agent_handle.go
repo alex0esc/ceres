@@ -39,7 +39,7 @@ type AgentHandle interface {
 	Name() string
 	Description() string
 	State() AgentState
-	SubmitTask(task *Task) <-chan TaskResult
+	SubmitTask(task Task) <-chan TaskResult
 	ClientHandle() ClientHandle
 	CurrentTask() *Task
 }
