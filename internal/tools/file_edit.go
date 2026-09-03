@@ -151,7 +151,7 @@ func (t FileEditTool) fileWrite(ctx context.Context, path, content string) (stri
 		"mkdir -p -- \"$(dirname -- %s)\" && cat > %s <<'%s'\n%s\n%s",
 		quotedPath, quotedPath, delim, content, delim,
 	)
-	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), t.containerName, cmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, cmd)
 	if err != nil {
 		return "", fmt.Errorf("file_write: failed to write file in sandbox: %w", err)
 	}
@@ -169,7 +169,7 @@ func (t FileEditTool) fileWrite(ctx context.Context, path, content string) (stri
 	)
 	statCtx, statCancel := context.WithTimeout(ctx, t.timeout)
 	defer statCancel()
-	statOut, statErr, statExit, err := runInContainer(statCtx, getDockerClient(), t.containerName, statCmd)
+	statOut, statErr, statExit, err := runInContainer(statCtx, t.containerName, statCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_write: failed to stat written file: %w", err)
 	}
@@ -241,7 +241,7 @@ func (t FileEditTool) fileInsert(ctx context.Context, path string, line int, con
 
 	// Read target file
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), t.containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, readCmd)
 	if err != nil {
 		return "", err
 	}
@@ -277,7 +277,7 @@ func (t FileEditTool) fileInsert(ctx context.Context, path string, line int, con
 	// Write safely via base64 to avoid shell escaping & heredoc issues
 	b64 := base64.StdEncoding.EncodeToString([]byte(newContent))
 	writeCmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
-	_, stderr, exitCode, err = runInContainer(execCtx, getDockerClient(), t.containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, t.containerName, writeCmd)
 	if err != nil {
 		return "", err
 	}
@@ -302,11 +302,10 @@ func (t FileEditTool) fileStrReplace(ctx context.Context, path, oldStr, newStr s
 
 	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	cli := getDockerClient()
 
 	// Read the current file content.
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, readCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to read file from sandbox: %w", err)
 	}
@@ -328,7 +327,7 @@ func (t FileEditTool) fileStrReplace(ctx context.Context, path, oldStr, newStr s
 	// delimiter to avoid clashing with content that itself contains
 	// "EOF"-like markers.
 	writeCmd := fmt.Sprintf("cat > %s <<'CERES_EOF_MARKER'\n%s\nCERES_EOF_MARKER", shellQuote(path), newContent)
-	_, stderr, exitCode, err = runInContainer(execCtx, cli, t.containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, t.containerName, writeCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to write file to sandbox: %w", err)
 	}

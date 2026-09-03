@@ -102,14 +102,13 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("file_read: start_line (%d) must not be greater than end_line (%d)", args.StartLine, args.EndLine)
 		}
 
-		cli := getDockerClient()
 
 		// Check the file size before reading it fully, so an oversized or
 		// otherwise unusual file (huge log, device file, etc.) never gets
 		// pulled entirely into memory just to be rejected afterwards.
 		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		statCmd := fmt.Sprintf("stat -c %%s -- %s", shellQuote(args.Path))
-		statOut, statErr, statExit, err := runInContainer(statCtx, cli, t.containerName, statCmd)
+		statOut, statErr, statExit, err := runInContainer(statCtx, t.containerName, statCmd)
 		statCancel()
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to stat file in sandbox: %w", err)
@@ -131,7 +130,7 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 		// reuse the existing exec plumbing (runInContainer) and get a clear
 		// stderr/exit code if the file is missing or unreadable.
 		cmd := fmt.Sprintf("cat -- %s", shellQuote(args.Path))
-		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, cmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, cmd)
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to read file from sandbox: %w", err)
 		}

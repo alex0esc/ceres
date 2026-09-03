@@ -75,14 +75,6 @@ func CloseDockerClient() {
 }
 
 
-func getDockerClient() *client.Client {
-	if dockerClient == nil {
-		log.Fatal("docker client not active or initialized!")
-	}
-	return dockerClient	
-}
-
-
 // runInContainer runs cmd via "bash -c" inside the given container using
 // Docker's exec API and returns separated stdout/stderr plus the exit code.
 // Reading of the exec's combined output stream is bound to ctx: if ctx is
@@ -90,18 +82,22 @@ func getDockerClient() *client.Client {
 // terminate the process for some reason, or the daemon connection hangs),
 // the read is abandoned, the exec is killed as a best-effort fallback, and
 // ctx.Err() is returned.
-func runInContainer(ctx context.Context, cli *client.Client, containerName, cmd string) (stdout string, stderr string, exitCode int, err error) {
+func runInContainer(ctx context.Context, containerName, cmd string) (stdout string, stderr string, exitCode int, err error) {
+	if dockerClient == nil {
+		return "", "", 0, fmt.Errorf("docker sandbox is not activated")
+	}
+	
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"bash", "-c", cmd},
 		AttachStdout: true,
 		AttachStderr: true,
 	}
-	execCreateResp, err := cli.ContainerExecCreate(ctx, containerName, execConfig)
+	execCreateResp, err := dockerClient.ContainerExecCreate(ctx, containerName, execConfig)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to create exec: %w", err)
 	}
 
-	attachResp, err := cli.ContainerExecAttach(ctx, execCreateResp.ID, container.ExecAttachOptions{})
+	attachResp, err := dockerClient.ContainerExecAttach(ctx, execCreateResp.ID, container.ExecAttachOptions{})
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to attach to exec: %w", err)
 	}
@@ -121,11 +117,11 @@ func runInContainer(ctx context.Context, cli *client.Client, containerName, cmd 
 		}
 	case <-ctx.Done():
 		attachResp.Close()
-		killExecProcess(context.Background(), cli, execCreateResp.ID)
+		killExecProcess(context.Background(), dockerClient, execCreateResp.ID)
 		return stdoutBuf.String(), stderrBuf.String(), -1, fmt.Errorf("command timed out: %w", ctx.Err())
 	}
 
-	inspectResp, err := cli.ContainerExecInspect(ctx, execCreateResp.ID)
+	inspectResp, err := dockerClient.ContainerExecInspect(ctx, execCreateResp.ID)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to inspect exec result: %w", err)
 	}

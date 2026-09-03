@@ -88,7 +88,6 @@ func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("execute_code: code must not be empty")
 		}
 
-		cli := getDockerClient()
 		// Pipe the code through base64 to avoid any shell-quoting issues with
 		// the snippet's own content (quotes, $, backticks, newlines, ...).
 		// No temp file is written to disk — python3 reads the script from stdin.
@@ -96,7 +95,7 @@ func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 		runCmd := fmt.Sprintf("echo %s | base64 -d | python3 -", shellQuote(encoded))
 		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
-		stdout, stderr, exitCode, err := runInContainer(execCtx, cli, t.containerName, runCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, runCmd)
 		if err != nil {
 			return "", fmt.Errorf("execute_code: failed to execute code in sandbox: %w", err)
 		}

@@ -115,7 +115,7 @@ func (b BashTool) Handler() tool.ToolHandler {
 			shellQuote(args.Command),
 		)
 
-		stdout, stderr, exitCode, err := runInContainer(execCtx, getDockerClient(), b.containerName, wrappedCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, b.containerName, wrappedCmd)
 		if err != nil {
 			return "", fmt.Errorf("bash: failed to execute command in sandbox: %w", err)
 		}
