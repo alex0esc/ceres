@@ -31,4 +31,4 @@ WORKDIR /app
 COPY --from=builder /app/ceres /usr/local/bin/ceres
 
 # Command to run the application
-CMD ["ceres"]
+ENTRYPOINT ["/bin/sh", "-c", "chmod -R o+rwX /app && exec ceres"]

@@ -1,3 +1,4 @@
+
 package tools
 
 import (
@@ -8,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +32,6 @@ func NewViewImageTool() ViewImageTool {
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
-	// Use the same timeout configured for sandbox commands.
 	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.timeout", "120s"))
 	if err != nil {
 		panic(fmt.Errorf("view_image: error while parsing sandbox.timeout in toolconfig.toml: %w", err))
@@ -58,7 +57,7 @@ func (ViewImageTool) Name() string {
 func (t ViewImageTool) Description() string {
 	return fmt.Sprintf(
 		"Reads an image from the sandbox container and appends it as user message in the chat.\n"+
-		"The path may be absolute or relative to the sandbox working directory. Images larger than %d bytes are rejected.",
+			"The path may be absolute or relative to the sandbox working directory. Images larger than %d bytes are rejected.",
 		t.maxSize,
 	)
 }
@@ -91,91 +90,12 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: path must not be empty")
 		}
 
-
-		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
-		statCmd := fmt.Sprintf(
-			"stat -c %%s -- %s",
-			shellQuote(args.Path),
-		)
-
-		statOut, statErr, statExit, err := runInContainer(
-			statCtx,
-			t.containerName,
-			statCmd,
-		)
-		statCancel()
-
+		imageData, size, err := readFileFromContainer(ctx, t.containerName, t.timeout, t.maxSize, args.Path)
 		if err != nil {
-			return "", fmt.Errorf("view_image: failed to stat file in sandbox: %w", err)
+			return "", fmt.Errorf("view_image: %w", err)
 		}
 
-		if statExit != 0 {
-			return "", fmt.Errorf(
-				"view_image: stat exited with code %d: %s",
-				statExit,
-				strings.TrimSpace(statErr),
-			)
-		}
-
-		size, err := strconv.ParseInt(strings.TrimSpace(statOut), 10, 64)
-		if err != nil {
-			return "", fmt.Errorf(
-				"view_image: failed to parse file size %q: %w",
-				strings.TrimSpace(statOut),
-				err,
-			)
-		}
-
-		if size <= 0 {
-			return "", fmt.Errorf("view_image: image %q is empty", args.Path)
-		}
-
-		if size > t.maxSize {
-			return "", fmt.Errorf(
-				"view_image: image is %d bytes, which exceeds the configured limit of %d bytes",
-				size,
-				t.maxSize,
-			)
-		}
-
-		// Read and base64-encode the image inside the sandbox.
-		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
-		defer cancel()
-
-		cmd := fmt.Sprintf(
-			"base64 -w 0 -- %s",
-			shellQuote(args.Path),
-		)
-
-		stdout, stderr, exitCode, err := runInContainer(
-			execCtx,
-			t.containerName,
-			cmd,
-		)
-		if err != nil {
-			return "", fmt.Errorf("view_image: failed to read image from sandbox: %w", err)
-		}
-
-		if exitCode != 0 {
-			return "", fmt.Errorf(
-				"view_image: base64 exited with code %d: %s",
-				exitCode,
-				strings.TrimSpace(stderr),
-			)
-		}
-
-		base64Image := strings.TrimSpace(stdout)
-		if base64Image == "" {
-			return "", fmt.Errorf("view_image: image %q produced empty base64 data", args.Path)
-		}
-
-
-		imageData, err := base64.StdEncoding.DecodeString(base64Image)
-		if err != nil {
-			return "", fmt.Errorf("view_image: failed to decode image data: %w", err)
-		}
-
-		mimeType := detectImageMimeType(args.Path, imageData)
+		mimeType := DetectImageMimeType(args.Path, imageData)
 		if mimeType == "" {
 			return "", fmt.Errorf(
 				"view_image: could not determine a supported image MIME type for %q",
@@ -183,7 +103,13 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			)
 		}
 
-		handle.ClientHandle().AppendImage(base64.StdEncoding.EncodeToString(imageData), mimeType, "")
+		handle.ClientHandle().AppendUserPrompt(handles.Prompt{
+			Text: "",
+			Images: []handles.ImageInput{{
+				MimeType:    mimeType,
+				Base64Image: base64.StdEncoding.EncodeToString(imageData),
+			}},
+		})
 
 		out := struct {
 			Path     string `json:"path"`
@@ -204,7 +130,7 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 	}
 }
 
-func detectImageMimeType(path string, data []byte) string {
+func DetectImageMimeType(path string, data []byte) string {
 	detected := http.DetectContentType(data)
 	if strings.HasPrefix(detected, "image/") {
 		return detected

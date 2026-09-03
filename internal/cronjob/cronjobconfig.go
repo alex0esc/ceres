@@ -79,11 +79,16 @@ func LoadCronJobsFromFile(path string, agents map[string]*agent.Agent) (map[stri
 			return nil, nil, fmt.Errorf("cron job %q: invalid timeout duration %q: %w", job.Name, job.Timeout, err)
 		}
 
+		promts := []handles.Prompt{}
+		for _, prompt := range job.Prompts {
+			promts = append(promts, handles.Prompt{ Text: prompt })
+		}
+
 		jobsMap[job.Name] = NewCronJob(
 			job.Name,
 			agents[job.AgentName],
 			job.Times,
-			handles.TaskClearAskMultiple(job.Prompts, timeout),
+			handles.TaskClearAskMultiple(promts, timeout),
 			timeout,
 		)
 	}

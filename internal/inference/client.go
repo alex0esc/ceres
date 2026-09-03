@@ -168,8 +168,8 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, userPrompt string, handle handles.AgentHandle) (*history.History, error, bool) {
-	client.appendUserMessage(userPrompt)
+func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, handle handles.AgentHandle) (*history.History, error, bool) {
+	client.AppendUserPrompt(prompt)
 
 	//allow cancable context with thread safety
 	runCtx, cancel := context.WithCancel(ctx)

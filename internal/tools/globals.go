@@ -3,10 +3,13 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
@@ -217,4 +220,65 @@ func lastIndexInRange(s, sep string, limit int) int {
 		limit = len(s)
 	}
 	return strings.LastIndex(s[:limit], sep)
+}
+
+
+
+// readFileFromContainer stats, size-checks, reads, and base64-decodes a
+// single file from inside the given sandbox container. Used by any tool
+// that needs to pull file contents out of the sandbox (view_image, discord
+// attachments, etc.).
+func readFileFromContainer(ctx context.Context, containerName string, timeout time.Duration, maxSize int64, path string) ([]byte, int64, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, 0, fmt.Errorf("path must not be empty")
+	}
+
+	statCtx, statCancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+	defer statCancel()
+
+	statCmd := fmt.Sprintf("stat -c %%s -- %s", shellQuote(path))
+
+	statOut, statErr, statExit, err := runInContainer(statCtx, containerName, statCmd)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to stat file in sandbox: %w", err)
+	}
+	if statExit != 0 {
+		return nil, 0, fmt.Errorf("stat exited with code %d: %s", statExit, strings.TrimSpace(statErr))
+	}
+
+	size, err := strconv.ParseInt(strings.TrimSpace(statOut), 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to parse file size %q: %w", strings.TrimSpace(statOut), err)
+	}
+	if size <= 0 {
+		return nil, 0, fmt.Errorf("file %q is empty", path)
+	}
+	if size > maxSize {
+		return nil, 0, fmt.Errorf("file is %d bytes, which exceeds the configured limit of %d bytes", size, maxSize)
+	}
+
+	execCtx, cancel := context.WithTimeout(ctx, timeout+2*killAfterBuffer)
+	defer cancel()
+
+	cmd := fmt.Sprintf("base64 -w 0 -- %s", shellQuote(path))
+
+	stdout, stderr, exitCode, err := runInContainer(execCtx, containerName, cmd)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read file from sandbox: %w", err)
+	}
+	if exitCode != 0 {
+		return nil, 0, fmt.Errorf("base64 exited with code %d: %s", exitCode, strings.TrimSpace(stderr))
+	}
+
+	base64Data := strings.TrimSpace(stdout)
+	if base64Data == "" {
+		return nil, 0, fmt.Errorf("file %q produced empty base64 data", path)
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to decode file data: %w", err)
+	}
+
+	return data, size, nil
 }
