@@ -18,7 +18,7 @@ import (
 // to them into a single tool, dispatched via the "action" parameter
 // ("list" or "call").
 type SubagentTool struct {
-	summarizePrompt string
+	summarizePrompt handles.Prompt
 	timeout time.Duration
 }
 
@@ -34,10 +34,10 @@ func NewSubagentTool() *SubagentTool {
 
 	return &SubagentTool{
 		timeout: timeout,
-		summarizePrompt: config.ReadEntry(tool.GetToolConfig(), "subagent.summarize_prompt",
-			"Summerize all actions and results that have been achieved in the current chat session for the orchestrator agent. " +
-			"IMPORTANT: The summary should contain everything that is needed by the orchestrator agent to evaluate your work!"),
-	}
+		summarizePrompt: handles.Prompt{ Text: config.ReadEntry(tool.GetToolConfig(), "subagent.summarize_prompt",
+			"Summerize all actions and results that have been achieved in the current chat session for your orchestrator agent. " +
+			"IMPORTANT: The summary should contain everything that is needed by the orchestrator agent to evaluate your work, he should get a clean answer from you he can work with!"),
+	}}
 }
 
 func (t *SubagentTool) Name() string {
@@ -183,8 +183,10 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 		}
 
 
-		prompts := make([]string, len(task.Prompts), len(task.Prompts)+1)
-		copy(prompts, task.Prompts)
+		prompts := make([]handles.Prompt, len(task.Prompts), len(task.Prompts)+1)
+		for _, prompt := range task.Prompts {
+			prompts = append(prompts, handles.Prompt{ Text: prompt })
+		}
 		prompts = append(prompts, t.summarizePrompt)
 		sub_task := handles.TaskClearAskMultiple(prompts, t.timeout)
 		sub_task.ParentCtx = ctx

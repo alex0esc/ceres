@@ -1,8 +1,11 @@
 package platforms
 
 import (
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/history"
@@ -13,8 +16,6 @@ import (
 	"github.com/alex0esc/ceres/pkg/platform"
 	"github.com/bwmarrin/discordgo"
 )
-
-
 
 type Discord struct {
 	session     *discordgo.Session
@@ -61,16 +62,13 @@ func (d *Discord) NewSession() error {
 	return nil
 }
 
-
 func (d *Discord) Name() string {
 	return "discord"
 }
 
-
 func (d *Discord) AgentName() string {
 	return d.agentName
 }
-
 
 // Listen blocks and listens for incoming DMs until the process is terminated.
 func (d *Discord) Listen(agent handles.AgentHandle) {
@@ -89,7 +87,7 @@ func (d *Discord) Listen(agent handles.AgentHandle) {
 		log.Printf("discord: failed to open connection: %v", err)
 		return
 	}
-	d.stopChannel = make(chan struct{})	
+	d.stopChannel = make(chan struct{})
 	<-d.stopChannel
 	err := d.session.Close()
 	if err != nil {
@@ -131,7 +129,10 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 		s.ChannelMessageSend(m.ChannelID, msg)
 		return
 	}
-	task := handles.TaskAskSimple(m.Content, d.messageTimeout)
+
+	images := d.downloadImageAttachments(m.Attachments)
+
+	task := handles.TaskAskSingle(handles.Prompt{Text: m.Content, Images: images}, d.messageTimeout)
 	resultCh := agent.SubmitTask(task)
 	result := <-resultCh
 	close(stopTyping)
@@ -140,7 +141,64 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	} else {
 		tools.SendChunked(s, m.ChannelID, result.Response.Filter(history.EntryTypeAssistent, history.EntryTypeToolCall).String())
 	}
+}
 
+// downloadImageAttachments filters a message's attachments down to images,
+// downloads each one, and returns them base64-encoded. Attachments that
+// aren't images or that fail to download are skipped (logged, not fatal).
+func (d *Discord) downloadImageAttachments(attachments []*discordgo.MessageAttachment) []handles.ImageInput {
+	if len(attachments) == 0 {
+		return nil
+	}
+
+	images := make([]handles.ImageInput, 0, len(attachments))
+	for _, att := range attachments {
+		if att == nil || att.URL == "" {
+			continue
+		}
+
+		data, err := downloadAttachment(att.URL)
+		if err != nil {
+			log.Printf("discord: failed to download attachment %q: %v", att.Filename, err)
+			continue
+		}
+
+		mimeType := tools.DetectImageMimeType(att.Filename, data)
+		if mimeType == "" {
+			// not an image, skip
+			continue
+		}
+
+		images = append(images, handles.ImageInput{
+			Base64Image: base64.StdEncoding.EncodeToString(data),
+			MimeType:    mimeType,
+		})
+	}
+
+	if len(images) == 0 {
+		return nil
+	}
+	return images
+}
+
+
+// downloadAttachment fetches the raw bytes of a Discord attachment URL.
+func downloadAttachment(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("http get failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+	return data, nil
 }
 
 

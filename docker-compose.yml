@@ -1,6 +1,7 @@
 services:
   ceres:
     build: .
+    user: root
     container_name: ceres-agent
     restart: unless-stopped
     volumes:
@@ -12,8 +13,7 @@ services:
       - sandbox
     tty: true
     stdin_open: true
-
-
+  
   sandbox:
     image: python:3.11-slim
     container_name: ceres-sandbox
@@ -24,4 +24,4 @@ services:
       - ./data_sandbox:/workspace
 
     restart: unless-stopped
-    command: tail -f /dev/null
+    command: ["/bin/sh", "-c", "chmod -R o+rwX /workspace && exec tail -f /dev/null"]

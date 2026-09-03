@@ -30,8 +30,9 @@ type TaskResult struct {
 	Err      error
 }
 
+
 type ClientHandle interface {
-	AppendImage(base64Image string, mimeType string, promt string)
+	AppendUserPrompt(prompt Prompt)
 }
 
 // AgentHandle describes everything a tool needs to know about an agent.

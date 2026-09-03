@@ -15,21 +15,37 @@ const(
 	TaskTypeCompress
 )
 
+
+
+type ImageInput struct {
+	Base64Image string
+	MimeType    string
+}
+
+type Prompt struct {
+	Text string
+	Images []ImageInput
+}
+
 // task represents a single queued unit of work
 type Task struct {
 	ParentCtx    context.Context
 	Timeout      time.Duration
-	Prompts      []string
+	Prompts      []Prompt
 	Tasktype     TaskType
 	ResultCh     chan TaskResult
 }
 
 
-func TaskAskSimple(promt string, timeout time.Duration) Task {
-	return Task{Prompts: []string{ promt }, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
+func TaskAskSimple(prompt string, timeout time.Duration) Task {
+	return Task{Prompts: []Prompt{ { Text: prompt, Images: nil }}, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
 }
 
-func TaskClearAskMultiple(promts []string, timeout time.Duration) Task {
+func TaskAskSingle(promts Prompt, timeout time.Duration) Task {
+	return Task{Prompts: []Prompt{ promts }, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
+}
+
+func TaskClearAskMultiple(promts []Prompt, timeout time.Duration) Task {
 	return Task{Prompts: promts, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeClearAsk}
 }
 

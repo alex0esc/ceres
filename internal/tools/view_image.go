@@ -175,7 +175,7 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: failed to decode image data: %w", err)
 		}
 
-		mimeType := detectImageMimeType(args.Path, imageData)
+		mimeType := DetectImageMimeType(args.Path, imageData)
 		if mimeType == "" {
 			return "", fmt.Errorf(
 				"view_image: could not determine a supported image MIME type for %q",
@@ -183,7 +183,12 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			)
 		}
 
-		handle.ClientHandle().AppendImage(base64.StdEncoding.EncodeToString(imageData), mimeType, "")
+		handle.ClientHandle().AppendUserPrompt(handles.Prompt{ Text: "",
+			Images: []handles.ImageInput{ {
+				MimeType: mimeType,
+				Base64Image: base64.StdEncoding.EncodeToString(imageData),
+			},},
+		})
 
 		out := struct {
 			Path     string `json:"path"`
@@ -204,7 +209,7 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 	}
 }
 
-func detectImageMimeType(path string, data []byte) string {
+func DetectImageMimeType(path string, data []byte) string {
 	detected := http.DetectContentType(data)
 	if strings.HasPrefix(detected, "image/") {
 		return detected

@@ -98,6 +98,8 @@ func (tui *Tui) loadAgentHistory() {
 			if tui.showReasoning {
 				tui.appendReasoningMessage(entry.String())
 			}
+		case history.EntryTypeImage: 
+			tui.appendUserMessage(entry.String())
 		}
 	}
 	tui.selectedAgent.Client.CatchUpOnEvent()
@@ -156,6 +158,8 @@ func (tui *Tui) mergeTokens() {
 		tui.appendSystemMessage(text.String())
 	case history.TokenTypeReasoning:
 		tui.appendReasoningMessage(text.String())
+	case history.EntryTypeImage:
+		tui.appendUserMessage(text.String())
 	}
 	tui.tokens = nil
 }

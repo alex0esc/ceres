@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -79,16 +80,6 @@ func (client *Client) ClearOnEvent() {
 }
 
 
-// apppending messages to history
-func (client *Client) appendUserMessage(prompt string) {
-	msg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
-	msg.OfMessage.Type = "message"
-	client.chatHistory = append(client.chatHistory, msg)	
-	client.triggerOnEvent(history.Token {Type: history.TokenTypeUser, Content: []string{ prompt }})
-	client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
-}
-
-
 func (client *Client) appendAssistentMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
 	msg.OfMessage.Type = "message"
@@ -96,34 +87,50 @@ func (client *Client) appendAssistentMessage(promt string) {
 }
 
 
-// appends an image with a promt before it in the history
-func (client *Client) AppendImage(base64Image string, mimeType string, prompt string) {
-	if mimeType == "" {
-		mimeType = "image/png"
-	}
-	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
 
+
+
+// appends a list of images with a single prompt after them in the history
+func (client *Client) AppendUserPrompt(prompt handles.Prompt) {
 	content := responses.ResponseInputMessageContentListParam{}
 
-	if prompt != "" {
-		content = append(content, responses.ResponseInputContentParamOfInputText(prompt))
-		client.triggerOnEvent(history.Token {Type: history.TokenTypeUser, Content: []string{ prompt }})
-		client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
+	dataURLs := make([]string, 0, len(prompt.Images))
+
+	hasImage := false
+	for _, img := range prompt.Images {
+		mimeType := img.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, img.Base64Image)
+		dataURLs = append(dataURLs, dataURL)
+
+		content = append(content, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{
+				Detail:   responses.ResponseInputImageDetailAuto,
+				ImageURL: openai.String(dataURL),
+			},
+		})
+		hasImage = true
 	}
 
-	content = append(content, responses.ResponseInputContentUnionParam{
-		OfInputImage: &responses.ResponseInputImageParam{
-			Detail:   responses.ResponseInputImageDetailAuto,
-			ImageURL: openai.String(dataURL),
-		},
-	})
+
+	if prompt.Text != "" {
+		content = append(content, responses.ResponseInputContentParamOfInputText(prompt.Text))
+	}
 
 	msg := responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRoleUser)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)
-	client.triggerOnEvent(history.Token {Type: history.TokenTypeImage, Content: []string{ dataURL }})
-}
 
+	if hasImage {
+		client.triggerOnEvent(history.Token{Type: history.TokenTypeImage, Content: dataURLs})
+	}
+	if prompt.Text != "" {
+		client.triggerOnEvent(history.Token{Type: history.TokenTypeUser, Content: []string{prompt.Text}})
+	}
+	client.triggerOnEvent(history.Token{Type: history.TokenEndOfSequence})
+}
 
 // returns request opts for ask stream and compress
 func (client *Client) requestOpts() []option.RequestOption {
