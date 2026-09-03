@@ -76,6 +76,10 @@ func (agent *Agent) State() handles.AgentState {
 	return agent.state
 }
 
+func (agent *Agent) ClearQueue() {
+	agent.queue = nil
+}
+
 func (agent *Agent) Name() string        { return agent.name }
 func (agent *Agent) Description() string { return agent.description }
 func (agent *Agent) IsSubagent() bool    { return agent.subagent }

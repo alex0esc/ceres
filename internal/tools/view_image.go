@@ -91,7 +91,6 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: path must not be empty")
 		}
 
-		cli := getDockerClient()
 
 		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		statCmd := fmt.Sprintf(
@@ -101,7 +100,6 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 
 		statOut, statErr, statExit, err := runInContainer(
 			statCtx,
-			cli,
 			t.containerName,
 			statCmd,
 		)
@@ -151,7 +149,6 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 
 		stdout, stderr, exitCode, err := runInContainer(
 			execCtx,
-			cli,
 			t.containerName,
 			cmd,
 		)

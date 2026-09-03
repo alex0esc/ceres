@@ -37,6 +37,7 @@ type Tui struct {
 	//config
 	messageTimeout time.Duration
 	showReasoning  bool
+	msgInterrupt   bool
 
 	//current text
 	messages []string
