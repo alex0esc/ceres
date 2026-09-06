@@ -28,13 +28,7 @@ func NewFileReadTool() FileReadTool {
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "sandbox.timeout", "120s"))
-	if err != nil {
-		panic(fmt.Errorf("file_read: error while parsing sandbox.timeout in toolconfig.toml"))
-	}
-	if timeout <= 0 {
-		panic(fmt.Errorf("file_read: sandbox.timeout must be positive"))
-	}
+	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second * 120)
 
 	var defSize int64 = 1024 * 40
 	maxSize := config.ReadEntry(cfg, "file_read.max_size_b", defSize)

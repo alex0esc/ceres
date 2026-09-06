@@ -1,32 +1,54 @@
 package tools
 
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // GetTimeTool returns the current time, optionally for a given IANA
-// timezone (e.g. "Europe/Berlin", "UTC"). Defaults to UTC if no
-// timezone is given or if the given timezone is invalid.
-type GetTimeTool struct{}
+// timezone (e.g. "Europe/Berlin", "UTC"). Falls back to a configurable
+// default timezone if no timezone is given or if the given timezone is
+// invalid.
+type GetTimeTool struct {
+	defaultLocation *time.Location
+	defaultTzName   string
+}
 
-// NewGetTimeTool constructs a GetTimeTool.
+// NewGetTimeTool constructs a GetTimeTool, reading the default timezone
+// from the tool config once up front. Falls back to UTC if the configured
+// value is empty or invalid.
 func NewGetTimeTool() GetTimeTool {
-	return GetTimeTool{}
+	tzName := config.ReadEntry(tool.GetToolConfig(), "get_time.default_timezone", "UTC")
+
+	loc, err := time.LoadLocation(tzName)
+	if err != nil {
+		log.Fatalf("get_time: invalid default_timezone %q in config: %v", tzName, err)
+	}
+
+	return GetTimeTool{
+		defaultLocation: loc,
+		defaultTzName:   tzName,
+	}
 }
 
 func (GetTimeTool) Name() string {
 	return "get_time"
 }
 
-func (GetTimeTool) Description() string {
-	return "Returns the current date and time. Optionally accepts an IANA timezone name (e.g. 'Europe/Berlin', 'America/New_York', 'UTC'); defaults to UTC if omitted." +
-		   "ALWAYS use this tool to verify what is meant by today (e.g if the user sais 'what ... today?')!"
+func (t GetTimeTool) Description() string {
+	return fmt.Sprintf(
+		"Returns the current date and time. Optionally accepts an IANA timezone name (e.g. 'Europe/Berlin', 'America/New_York', 'UTC'); defaults to %s if omitted. "+
+			"ALWAYS use this tool to verify what is meant by today (e.g if the user sais 'what ... today?')! If the user does not tell you the timezone expect it is just the default timezone!",
+		t.defaultTzName,
+	)
 }
 
 func (GetTimeTool) Parameters() map[string]any {
@@ -35,7 +57,7 @@ func (GetTimeTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"timezone": map[string]any{
 				"type":        []string{"string", "null"},
-				"description": "IANA timezone name, e.g. 'Europe/Berlin'. Defaults to UTC if omitted.",
+				"description": "IANA timezone name, e.g. 'Europe/Berlin'. Defaults to the configured default timezone if omitted.",
 			},
 		},
 		"required":             []string{"timezone"},
@@ -43,7 +65,7 @@ func (GetTimeTool) Parameters() map[string]any {
 	}
 }
 
-func (GetTimeTool) Handler() tool.ToolHandler {
+func (t GetTimeTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Timezone string `json:"timezone"`
@@ -55,8 +77,9 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 				return "", fmt.Errorf("get_time: invalid arguments: %w", err)
 			}
 		}
-		loc := time.UTC
-		tzName := "UTC"
+
+		loc := t.defaultLocation
+		tzName := t.defaultTzName
 		if args.Timezone != "" {
 			l, err := time.LoadLocation(args.Timezone)
 			if err != nil {
@@ -65,6 +88,7 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 			loc = l
 			tzName = args.Timezone
 		}
+
 		now := time.Now().In(loc)
 		out := struct {
 			Timezone  string `json:"timezone"`
@@ -77,6 +101,7 @@ func (GetTimeTool) Handler() tool.ToolHandler {
 			Unix:      now.Unix(),
 			Formatted: now.Format("Monday, 02 January 2006 15:04:05 MST"),
 		}
+
 		result, err := json.Marshal(out)
 		if err != nil {
 			return "", fmt.Errorf("get_time: failed to marshal result: %w", err)

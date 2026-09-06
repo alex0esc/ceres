@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -26,11 +25,7 @@ type SubagentTool struct {
 // values once up front.
 func NewSubagentTool() *SubagentTool {
 
-	timeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", "1h"))
-	if err != nil {
-		log.Fatal("Could not read subagent.timeout from tool config!")
-	}
-
+	timeout := config.ReadEntry(tool.GetToolConfig(), "subagent.timeout", time.Hour * 1)
 
 	return &SubagentTool{
 		timeout: timeout,

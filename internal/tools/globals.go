@@ -20,8 +20,9 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-//direcotry where all skills are stored
+//direcotries
 var memoryBaseDir string
+var wakeupBaseDir string
 
 //all subagents needed for subagent tools
 var subAgents map[string]handles.AgentHandle = nil
@@ -34,6 +35,10 @@ func SetMemoryDir(path string) {
 	memoryBaseDir = path
 }
 
+
+func SetWakeupDir(path string) {
+	wakeupBaseDir = path
+}
 
 func SetSubagents(agents map[string]handles.AgentHandle) {
 	subAgents = agents

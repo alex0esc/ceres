@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -30,13 +29,7 @@ func NewExecuteCodeTool() ExecuteCodeTool {
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
-	timeout, err := time.ParseDuration(config.ReadEntry(cfg, "execute_code.timeout", "180s"))
-	if err != nil {
-		panic(fmt.Errorf("execute_code: error while parsing execute_code.timeout in toolconfig.toml"))
-	}
-	if timeout <= 0 {
-		panic(fmt.Errorf("execute_code: execute_code.timeout must be positive"))
-	}
+	timeout := config.ReadEntry(cfg, "execute_code.timeout", time.Second * 180)
 
 	var defMaxOutput int64 = 1024 * 20
 	maxOutput := config.ReadEntry(cfg, "execute_code.max_output_b", defMaxOutput)
