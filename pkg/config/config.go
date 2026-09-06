@@ -1,10 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -32,11 +34,9 @@ func New(path string) (*Config, error) {
 // Safe to call concurrently from multiple goroutines.
 func ReadEntry[T any](c *Config, key string, defaultValue T) T {
 	keys := strings.Split(key, ".")
-
 	c.mu.RLock()
 	val, found := getNestedValue(c.data, keys)
 	c.mu.RUnlock()
-
 	if !found {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -46,12 +46,11 @@ func ReadEntry[T any](c *Config, key string, defaultValue T) T {
 			if c.data == nil {
 				c.data = make(map[string]any)
 			}
-			setNestedValue(c.data, keys, defaultValue)
+			setNestedValue(c.data, keys, toStorable(defaultValue))
 			_ = c.save()
 			return defaultValue
 		}
 	}
-
 	if casted, ok := convertType[T](val); ok {
 		return casted
 	}
@@ -123,13 +122,25 @@ func setNestedValue(m map[string]any, keys []string, value any) {
 	}
 }
 
+// toStorable converts a default value into a TOML-friendly representation
+// before it gets written to disk for the first time. Without this, types
+// like time.Duration would be written as their raw int64 (nanoseconds)
+// instead of the human-readable string form that convertType expects to
+// read back in.
+func toStorable(value any) any {
+	switch v := value.(type) {
+	case time.Duration:
+		return v.String() // e.g. "10m0s" - the inverse of time.ParseDuration
+	default:
+		return value
+	}
+}
 
 func convertType[T any](val any) (T, bool) {
 	var zero T
 	if v, ok := val.(T); ok {
 		return v, true
 	}
-
 	switch any(zero).(type) {
 	case int:
 		if v, ok := val.(int64); ok {
@@ -139,6 +150,14 @@ func convertType[T any](val any) (T, bool) {
 		if v, ok := val.(int64); ok {
 			return any(float64(v)).(T), true
 		}
+	case time.Duration:
+		if s, ok := val.(string); ok {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				log.Fatalf("config: invalid duration %q: %v", s, err)
+			}
+			return any(d).(T), true
+		}
 	case []string:
 		if rawSlice, ok := val.([]any); ok {
 			strSlice := make([]string, 0, len(rawSlice))
@@ -146,7 +165,7 @@ func convertType[T any](val any) (T, bool) {
 				if str, ok := item.(string); ok {
 					strSlice = append(strSlice, str)
 				} else {
-					return zero, false 
+					return zero, false
 				}
 			}
 			return any(strSlice).(T), true

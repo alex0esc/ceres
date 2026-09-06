@@ -3,6 +3,7 @@ package app
 
 const AgentsFolderPath = "agents/"
 const MemoryFolderPath = "memories/"
+const WakeupFolderPath = "wakeups/"
 const LogFilePath = "logs/log.txt"
 const EndpointsConfigPath = "config/endpoints.toml"
 const CronJobsConfigPath = "config/cronejobs.toml"

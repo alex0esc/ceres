@@ -25,6 +25,7 @@ type Discord struct {
 	agentName      string
 	userID         string
 	messageTimeout time.Duration
+	messagePrefix  string
 }
 
 // NewDiscord constructs a Discord platform, reading all relevant config
@@ -38,16 +39,15 @@ func NewDiscord() *Discord {
 	agentName := config.ReadEntry(cfg, "discord.agent_name", "Ceres")
 	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
 
-	messageTimeout, err := time.ParseDuration(config.ReadEntry(cfg, "discord.message_timeout", "60m"))
-	if err != nil {
-		log.Fatalf("error while parsing discord.message_timeout in server config: %v", err)
-	}
+	messageTimeout := config.ReadEntry(cfg, "discord.message_timeout", time.Minute * 60)
+	messagePrefix := config.ReadEntry(cfg, "discord.message_prefix", "[Discord DM] ")
 
 	return &Discord{
 		botToken:       botToken,
 		agentName:      agentName,
 		userID:         userID,
 		messageTimeout: messageTimeout,
+		messagePrefix: messagePrefix,
 	}
 }
 
@@ -132,14 +132,21 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 
 	images := d.downloadImageAttachments(m.Attachments)
 
-	task := handles.TaskAskSingle(handles.Prompt{Text: m.Content, Images: images}, d.messageTimeout)
+	msg := ""
+	if m.Content == "" {
+		msg = d.messagePrefix + "The user sent an empty text from discord!"
+	} else {
+		msg = d.messagePrefix + m.Content
+	}
+
+	task := handles.TaskAskSingle(handles.Prompt{Text: msg, Images: images}, d.messageTimeout)
 	resultCh := agent.SubmitTask(task)
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
 	} else {
-		tools.SendChunked(s, m.ChannelID, result.Response.Filter(history.EntryTypeAssistent, history.EntryTypeToolCall).String())
+		tools.SendChunked(s, m.ChannelID, result.Response.Filter(history.EntryTypeAssistent).String())
 	}
 }
 

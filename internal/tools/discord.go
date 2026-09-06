@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -6,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -46,14 +46,7 @@ func NewDiscordTool() *DiscordTool {
 	// read out of the same container
 	toolCfg := tool.GetToolConfig()
 	containerName := config.ReadEntry(toolCfg, "sandbox.container_name", "ceres-sandbox")
-
-	timeout, err := time.ParseDuration(config.ReadEntry(toolCfg, "sandbox.timeout", "120s"))
-	if err != nil {
-		panic(fmt.Errorf("discord_tool: error while parsing sandbox.timeout in toolconfig.toml: %w", err))
-	}
-	if timeout <= 0 {
-		panic(fmt.Errorf("discord_tool: sandbox.timeout must be positive"))
-	}
+	timeout := config.ReadEntry(toolCfg, "sandbox.timeout", time.Second * 120)
 
 	// Discord's default per-file upload limit for bots without boosted
 	// guild perks is 25MB; default conservatively below that.
@@ -62,7 +55,7 @@ func NewDiscordTool() *DiscordTool {
 
 	session, err := discordgo.New("Bot " + botToken)
 	if err != nil {
-		panic(fmt.Errorf("discord_tool: failed to create session: %w", err))
+		slog.Error(fmt.Sprintf("discord_tool: failed to create session: %v", err))
 	}
 
 	return &DiscordTool{

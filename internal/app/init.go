@@ -28,6 +28,7 @@ func  Start() error {
 	}
 
 	tools.SetMemoryDir(MemoryFolderPath)
+	tools.SetWakeupDir(WakeupFolderPath)
 	initSubagentTool()
 	err = tools.InitDockerClient()
 	if err != nil {

@@ -1,7 +1,6 @@
 package bubbletea
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
@@ -93,10 +92,7 @@ func newTextArea() textarea.Model {
 }
 
 func initialTui() (*Tui, error) {
-	timeout, err := time.ParseDuration(config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", "60m"))
-	if err != nil {
-		return nil, fmt.Errorf("error while parsing tui_timeout in server config: %v", err)
-	}
+	timeout := config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", time.Minute * 60)
 
 	return &Tui{
 		textarea: newTextArea(),

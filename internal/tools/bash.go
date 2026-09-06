@@ -1,11 +1,9 @@
-
 package tools
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/alex0esc/ceres/pkg/config"
@@ -31,11 +29,7 @@ type BashTool struct {
 // NewBashTool constructs a BashTool, reading all relevant config values once
 // up front so the handler doesn't need to re-read config on every call.
 func NewBashTool() BashTool {
-	maxTimeout, err := time.ParseDuration(config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", "120s"))
-	if err != nil || maxTimeout <= 0 {
-		log.Fatal("Could not read sandbox.timeout or invalid value in tool config!")
-	}
-
+	maxTimeout := config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", time.Second * 120)
 	containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
 
 	return BashTool{
