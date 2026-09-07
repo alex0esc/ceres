@@ -2,11 +2,12 @@ package app
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/commands"
 	_ "github.com/alex0esc/ceres/internal/commands"
-	"github.com/alex0esc/ceres/internal/cronjob"
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms"
 	_ "github.com/alex0esc/ceres/internal/platforms"
@@ -27,8 +28,6 @@ func  Start() error {
 		return err
 	}
 
-	tools.SetMemoryDir(MemoryFolderPath)
-	tools.SetWakeupDir(WakeupFolderPath)
 	initSubagentTool()
 	err = tools.InitDockerClient()
 	if err != nil {
@@ -47,16 +46,13 @@ func  Start() error {
 		agent.Start()
 	}
 
-	err = startCroneJobs()
-	if err != nil {
-		return err
-	}
-
 	registerInternalCommands()
 	err = command.RegisterExternal()
 	if err != nil {
 		return err
 	}
+
+	cronLib.Start()
 
 	return nil
 }
@@ -74,7 +70,6 @@ func Shutdown() {
 	tools.CloseDockerClient()
 	endpoints = nil
 	agents = nil
-	cronJobs = nil
 	cronLib = nil
 	cfg = nil
 	tool.ClearRegistry()
@@ -85,24 +80,24 @@ func Shutdown() {
 
 func loadConfigs() error {
 	var err error
-	cfg, err = config.New(AppConfigPath)
+	cfg, err = config.New(constants.AppConfigPath)
 	if err != nil {
 		return fmt.Errorf("error loading server config: %v", err)
 	}
 
-	err = tool.LoadToolConfig(ToolConfigPath)
+	err = tool.LoadToolConfig()
 	if err != nil {
 		return fmt.Errorf("error loading tool config: %v", err)
 	}
 
-	err = platform.LoadPlatformConfig(PlatformConfigPath)
+	err = platform.LoadPlatformConfig()
 	if err != nil {
 		return fmt.Errorf("error loading platform config: %v", err)
 	}
 
-	endpoints, err = inference.LoadEndpointsFromConfig(EndpointsConfigPath)
+	endpoints, err = inference.LoadEndpointsFromConfig()
 	if err != nil {
-		return fmt.Errorf("error reading %s: %v", EndpointsConfigPath, err)
+		return fmt.Errorf("error reading endpoints config: %v", err)
 	}	
 	
 	registerInternalTools()
@@ -111,9 +106,15 @@ func loadConfigs() error {
 		return fmt.Errorf("error registering external tool: %v", err)
 	}
 
-	agents, err = agent.LoadAgentsFromDir(AgentsFolderPath, endpoints)
+
+	zone, err := time.LoadLocation(config.ReadEntry(tool.GetToolConfig(), "timezone", "Local"))
 	if err != nil {
-		return fmt.Errorf("error loading agent: %v", err)
+		return fmt.Errorf("invalid timezone in toolconfig")
+	}
+	cronLib = cron.New(cron.WithLocation(zone))
+	agents, err = agent.LoadAgentsFromDir(endpoints, cronLib)
+	if err != nil {
+		return fmt.Errorf("error loading agents: %v", err)
 	}	
 	return nil
 }
@@ -132,6 +133,7 @@ func registerInternalTools() {
 	tool.Register(tools.NewMemoryEditTool())
 	tool.Register(tools.NewSubagentTool())
 	tool.Register(tools.NewViewImageTool())
+	tool.Register(tools.NewWakeupTool())
 }
 
 
@@ -145,7 +147,7 @@ func registerInternalCommands() {
 	command.Register(commands.NewClearCommand())
 	command.Register(commands.NewCompressCommand())
 	command.Register(commands.NewInterruptCommand())
-	command.Register(commands.NewCronCommand(cronJobs))
+	command.Register(commands.NewWakeupCommand())
 }
 
 // initilaizes the subagnent tools with the right agent references
@@ -169,22 +171,3 @@ func initPlatforms() {
 	}
 }
 
-
-// starts all chrone jobs
-func startCroneJobs() error {
-	jobs, loc, err := cronjob.LoadCronJobsFromFile(CronJobsConfigPath, agents)
-	if err != nil {
-		return err
-	}
-	cronLib = cron.New(cron.WithLocation(loc))
-	cronJobs = jobs
-
-	
-	for _, job := range cronJobs {
-		job.Register(cronLib)	
-	}
-
-	cronLib.Start()
-
-	return nil
-}

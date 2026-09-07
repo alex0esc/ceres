@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -9,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
@@ -77,7 +77,7 @@ func (m MemoryReadTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("memory_read: agent handle returned empty name")
 		}
 
-		agentDir := filepath.Clean(filepath.Join(memoryBaseDir, filepath.Base(agentName)))
+		agentDir := filepath.Clean(filepath.Join(constants.MemoryFolderPath, filepath.Base(agentName)))
 
 		var args struct {
 			Action    string `json:"action"`
@@ -189,7 +189,7 @@ func memoryList(agentDir string, subpath string, recursive bool) (string, error)
 		}
 	}
 
-	relBaseDir, _ := filepath.Rel(memoryBaseDir, targetDir)
+	relBaseDir, _ := filepath.Rel(constants.MemoryFolderPath, targetDir)
 
 	out := struct {
 		BaseDir string  `json:"base_dir"`

@@ -11,15 +11,16 @@ import (
 
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/bubbletea"
+	"github.com/alex0esc/ceres/internal/constants"
 )
 
 //create two different writers one for the cli state and one for the tui
 func initLogging() (io.Writer, io.Writer) {
-	if err := os.MkdirAll(filepath.Dir(app.LogFilePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(constants.LogFilePath), 0755); err != nil {
 		log.Fatalf("failed to create log directory: %v", err)
 	}
 
-	f, err := os.OpenFile(app.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(constants.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}

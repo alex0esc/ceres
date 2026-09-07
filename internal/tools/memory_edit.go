@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -9,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -84,7 +84,7 @@ func (m MemoryEditTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("memory_edit: agent handle returned empty name")
 		}
 
-		agentDir := filepath.Clean(filepath.Join(memoryBaseDir, filepath.Base(agentName)))
+		agentDir := filepath.Clean(filepath.Join(constants.MemoryFolderPath, filepath.Base(agentName)))
 
 		var args struct {
 			Action  string `json:"action"`

@@ -20,9 +20,6 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-//direcotries
-var memoryBaseDir string
-var wakeupBaseDir string
 
 //all subagents needed for subagent tools
 var subAgents map[string]handles.AgentHandle = nil
@@ -30,15 +27,6 @@ var subAgents map[string]handles.AgentHandle = nil
 // used by all sandbox-related tools (bash, read_file, write_file).
 var dockerClient *client.Client = nil
 
-
-func SetMemoryDir(path string) {
-	memoryBaseDir = path
-}
-
-
-func SetWakeupDir(path string) {
-	wakeupBaseDir = path
-}
 
 func SetSubagents(agents map[string]handles.AgentHandle) {
 	subAgents = agents
