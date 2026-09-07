@@ -220,7 +220,7 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 	// Protected is always false here - only the system creates protected wakeups, never the agent itself via this tool.
 	w := wakeup.NewWakeUp(*name, *description, handle, fireAt, cronSpec, tasks, t.timeout, false)
 
-	if err := handle.SetWakeup(w); err != nil {
+	if err := handle.AddWakeup(w); err != nil {
 		return "", fmt.Errorf("wakeup: failed to set wakeup: %w", err)
 	}
 
@@ -248,11 +248,13 @@ func (t WakeupTool) handleRemove(handle handles.AgentHandle, name *string) (stri
 
 	wakeupName := strings.TrimSpace(*name)
 
-	if !handle.HasWakeup(wakeupName) {
+	wu := handle.GetWakeup(wakeupName)
+	if wu == nil {
 		return "", fmt.Errorf("wakeup: no wakeup named %q", wakeupName)
 	}
-	if !handle.RemoveWakeup(wakeupName) {
-		return "", fmt.Errorf("wakeup: could not remove wakeup %q (it may be protected)", wakeupName)
+	
+	if wu.Protected() || !handle.RemoveWakeup(wakeupName) {
+		return "", fmt.Errorf("wakeup: could not remove wakeup %q (it is probably protected)", wakeupName)
 	}
 
 	result := struct {

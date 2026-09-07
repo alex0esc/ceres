@@ -61,6 +61,6 @@ type AgentHandle interface {
 
 	ExecuteWakeup(name string) bool 
 	RemoveWakeup(name string) bool 
-	HasWakeup(name string) bool
-	SetWakeup(wakeup WakeupHandle) error 	
+	AddWakeup(wakeup WakeupHandle) error 	
+	GetWakeup(name string) WakeupHandle
 }
