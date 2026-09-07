@@ -150,16 +150,11 @@ func (agent *Agent) RemoveWakeup(name string) bool {
 	return true
 }
 
-func (agent *Agent) HasWakeup(name string) bool {
-	_, ok := agent.wakeups[name]
-	return ok
-}
-
-func (agent *Agent) SetWakeup(wh handles.WakeupHandle) error {
+func (agent *Agent) AddWakeup(wh handles.WakeupHandle) error {
 	agent.mutex.Lock()
-	w, ok := agent.wakeups[wh.Name()]
+	_, ok := agent.wakeups[wh.Name()]
 	if ok {
-		w.Stop()
+		return fmt.Errorf("wakeup with name %s already exists", wh.Name())
 	}
 	wu := wh.(*wakeup.WakeUp)
 	agent.wakeups[wh.Name()] = wu  
@@ -172,4 +167,12 @@ func (agent *Agent) SetWakeup(wh handles.WakeupHandle) error {
 		return err
 	}
 	return nil
+}
+
+func (agent *Agent) GetWakeup(name string) handles.WakeupHandle {
+	wu, ok := agent.wakeups[name]
+	if !ok {
+		return nil
+	}
+	return wu
 }
