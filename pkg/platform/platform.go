@@ -3,6 +3,7 @@ package platform
 import (
 	"log"
 
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
@@ -44,8 +45,8 @@ func Get(name string) Platform {
 }
 
 
-func LoadPlatformConfig(path string) error {
-	conf, err := config.New(path)
+func LoadPlatformConfig() error {
+	conf, err := config.New(constants.PlatformConfigPath)
 	if err != nil {
 		return err
 	}

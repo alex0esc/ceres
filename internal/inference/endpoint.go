@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 )
@@ -38,8 +39,8 @@ type EndpointConfig struct {
 }
 
 // load the endpoints into a slice
-func LoadEndpointsFromConfig(path string) (map[string]Endpoint, error) {
-	cfg, err := EnsureAndLoadEndpointsConfig(path)
+func LoadEndpointsFromConfig() (map[string]Endpoint, error) {
+	cfg, err := ensureAndLoadEndpointsConfig(constants.EndpointsConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func LoadEndpointsFromConfig(path string) (map[string]Endpoint, error) {
 
 
 //create config file if missing or load current config
-func EnsureAndLoadEndpointsConfig(path string) (Config, error) {
+func ensureAndLoadEndpointsConfig(path string) (Config, error) {
 	var cfg Config
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		// default config

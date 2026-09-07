@@ -9,3 +9,4 @@ go.sum
 /data_agent/
 /skills/
 /logs/
+/wakeups/

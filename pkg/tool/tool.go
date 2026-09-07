@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
@@ -75,8 +76,8 @@ func Names() []string {
 
 
 
-func LoadToolConfig(path string) error {
-	conf, err := config.New(path)
+func LoadToolConfig() error {
+	conf, err := config.New(constants.ToolConfigPath)
 	if err != nil {
 		return err
 	}

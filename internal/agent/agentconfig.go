@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/robfig/cron/v3"
 )
 
 // AgentConfig is the on-disk representation of an agent, loaded from a .toml file
@@ -33,7 +35,7 @@ type AgentConfig struct {
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
 // matching endpoint and tools from the provided registries. If Quantity is
 // greater than 1, multiple agents are returned, named "<name>-1" .. "<name>-n".
-func LoadAgentFromFile(path string, endpoints map[string]inference.Endpoint) ([]*Agent, error) {
+func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cronLib *cron.Cron) ([]*Agent, error) {
 	var cfg AgentConfig
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode agent config %q: %w", path, err)
@@ -74,7 +76,7 @@ func LoadAgentFromFile(path string, endpoints map[string]inference.Endpoint) ([]
 			client.RegisterTool(tool.Get(toolName))
 		}
 
-		agents = append(agents, NewAgent(name, cfg.Description, client, cfg.Subagent))
+		agents = append(agents, NewAgent(name, cfg.Description, client, cfg.Subagent, cronLib))
 	}
 
 	return agents, nil
@@ -83,8 +85,9 @@ func LoadAgentFromFile(path string, endpoints map[string]inference.Endpoint) ([]
 // LoadAgentsFromDir reads every .toml file in the given directory and loads
 // each one as an Agent (or several, if quantity > 1), wiring it up against
 // the provided endpoints.
-func LoadAgentsFromDir(dir string, endpoints map[string]inference.Endpoint) (map[string]*Agent, error) {
-	err := EnsureOneAgentFile(dir)
+func LoadAgentsFromDir(endpoints map[string]inference.Endpoint, cronLib *cron.Cron) (map[string]*Agent, error) {
+	dir := constants.AgentsFolderPath
+	err := ensureOneAgentFile(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +105,7 @@ func LoadAgentsFromDir(dir string, endpoints map[string]inference.Endpoint) (map
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		loaded, err := LoadAgentFromFile(path, endpoints)
+		loaded, err := loadAgentFromFile(path, endpoints, cronLib)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load agent from %q: %w", path, err)
 		}
@@ -114,7 +117,7 @@ func LoadAgentsFromDir(dir string, endpoints map[string]inference.Endpoint) (map
 }
 
 // CreateDefaultAgentFile creates a main agent configuration file if does not exist
-func EnsureOneAgentFile(dir string) error {
+func ensureOneAgentFile(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create agents directory: %w", err)
 	}

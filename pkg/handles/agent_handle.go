@@ -1,6 +1,10 @@
 package handles
 
-import "github.com/alex0esc/ceres/internal/history"
+import (
+	"time"
+
+	"github.com/alex0esc/ceres/internal/history"
+)
 
 type AgentState int
 
@@ -35,6 +39,16 @@ type ClientHandle interface {
 	AppendUserPrompt(prompt Prompt)
 }
 
+
+type WakeupHandle interface {
+	Name() string
+	Description() string
+	FireAt() *time.Time
+	CroneSpec() string
+	Protected() bool
+}
+
+
 // AgentHandle describes everything a tool needs to know about an agent.
 type AgentHandle interface {
 	Name() string
@@ -43,4 +57,10 @@ type AgentHandle interface {
 	SubmitTask(task Task) <-chan TaskResult
 	ClientHandle() ClientHandle
 	CurrentTask() *Task
+	ListWakeups() []WakeupHandle
+
+	ExecuteWakeup(name string) bool 
+	RemoveWakeup(name string) bool 
+	HasWakeup(name string) bool
+	SetWakeup(wakeup WakeupHandle) error 	
 }

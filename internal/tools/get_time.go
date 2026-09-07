@@ -26,11 +26,11 @@ type GetTimeTool struct {
 // from the tool config once up front. Falls back to UTC if the configured
 // value is empty or invalid.
 func NewGetTimeTool() GetTimeTool {
-	tzName := config.ReadEntry(tool.GetToolConfig(), "get_time.default_timezone", "UTC")
+	tzName := config.ReadEntry(tool.GetToolConfig(), "timezone", "Local")
 
 	loc, err := time.LoadLocation(tzName)
 	if err != nil {
-		log.Fatalf("get_time: invalid default_timezone %q in config: %v", tzName, err)
+		log.Fatalf("get_time: invalid timezone %q in tool config: %v", tzName, err)
 	}
 
 	return GetTimeTool{
@@ -46,8 +46,9 @@ func (GetTimeTool) Name() string {
 func (t GetTimeTool) Description() string {
 	return fmt.Sprintf(
 		"Returns the current date and time. Optionally accepts an IANA timezone name (e.g. 'Europe/Berlin', 'America/New_York', 'UTC'); defaults to %s if omitted. "+
-			"ALWAYS use this tool to verify what is meant by today (e.g if the user sais 'what ... today?')! If the user does not tell you the timezone expect it is just the default timezone!",
-		t.defaultTzName,
+			"ALWAYS use this tool if you do any time dependent task, you cant expect that the returned time you got in you last response is still correct! " +
+			"If the user does not explicitly mention a time zone expect you have to work with the default timezone %s.",
+		t.defaultTzName, t.defaultTzName,
 	)
 }
 
@@ -57,7 +58,7 @@ func (GetTimeTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"timezone": map[string]any{
 				"type":        []string{"string", "null"},
-				"description": "IANA timezone name, e.g. 'Europe/Berlin'. Defaults to the configured default timezone if omitted.",
+				"description": "IANA timezone name, e.g. 'Europe/Berlin'. Defaults to the default timezone if omitted.",
 			},
 		},
 		"required":             []string{"timezone"},
@@ -80,7 +81,7 @@ func (t GetTimeTool) Handler() tool.ToolHandler {
 
 		loc := t.defaultLocation
 		tzName := t.defaultTzName
-		if args.Timezone != "" {
+		if args.Timezone != "" && args.Timezone != "null" {
 			l, err := time.LoadLocation(args.Timezone)
 			if err != nil {
 				return "", fmt.Errorf("get_time: unknown timezone %q: %w", args.Timezone, err)
