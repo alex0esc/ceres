@@ -63,7 +63,7 @@ func handleWakeup(agent handles.AgentHandle, args []string) string {
 			return fmt.Sprintf("Wakeup with name '%s' does not exist.", name)
 		}
 
-		return fmt.Sprintf("Queued wakeup '%s' for execution.", name)
+		return fmt.Sprintf("*Queued wakeup '%s' for execution.*", name)
 
 	default:
 		return "Unknown subcommand. Usage: `/wake list` or `/wake run <name>`"

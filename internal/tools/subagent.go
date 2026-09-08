@@ -38,7 +38,7 @@ func (t *SubagentTool) Name() string {
 
 func (t *SubagentTool) Description() string {
 	return fmt.Sprintf(
-		"Use action='list' to see all available subagents together with their descriptions and current status; use this first before calling a subagent. "+
+		"Use action='list' to see all available subagents together with their descriptions and current status; list the subagents before calling a subagent. "+
 			"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel. This blocks until all submitted tasks have finished. "+
 			"Each entry in tasks contains an agent, one or more task prompts, and a summary_instructions string. "+
 			"Every task must be fully self-contained and include the complete context, all relevant information, the concrete objective, constraints, assumptions, and expected result needed by the subagent to perform it correctly. "+
@@ -61,7 +61,7 @@ func (t *SubagentTool) Parameters() map[string]any {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        []string{"list", "call"},
-				"description": "Which operation to perform: 'list' to list subagents, 'call' to submit tasks to subagents.",
+				"description": "Which operation to perform. Use list before call!",
 			},
 			"tasks": map[string]any{
 				"type":        "array",
@@ -72,7 +72,7 @@ func (t *SubagentTool) Parameters() map[string]any {
 					"properties": map[string]any{
 						"agent": map[string]any{
 							"type":        "string",
-							"description": "Name of the subagent that should run this task.",
+							"description": "Name of the subagent that should run this task. Use list to find out the subagent names!",
 						},
 						"prompts": map[string]any{
 							"type": "array",

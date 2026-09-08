@@ -27,7 +27,7 @@ func handleClear(agnt handles.AgentHandle, args []string) string {
 	go func() {
 		res := <- result		
 		if res.Err != nil {
-			log.Printf("Error while after submitting clear: %v", res.Err)
+			log.Printf("Error after submitting clear: %v", res.Err)
 		}
 	}();
 	return "*Clear task has been submitted to the agents queue.*"
