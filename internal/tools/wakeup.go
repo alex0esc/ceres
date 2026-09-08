@@ -1,5 +1,6 @@
 package tools
 
+
 import (
 	"context"
 	"encoding/json"
@@ -55,9 +56,9 @@ func (t WakeupTool) Description() string {
 
 	return fmt.Sprintf(
 		"Tool to manage scheduled wakeups. Use action \"list\" to see all currently scheduled wakeups, including protected user-created wakeups which cannot be removed or edited. "+
-			"Use action \"add\" to create a new one-shot or recurring wakeup. Name, description, and at least one task are required, plus exactly one of fire_at or cron_spec. "+
-			"Each entry in tasks is an independent prompt that will be executed when the wakeup fires. Every task must contain the complete context, all relevant information, "+
-			"the concrete goal, constraints, and the expected result needed to perform that task correctly; never assume that context from another task, an earlier message, or another wakeup is available. "+
+			"Use action \"add\" to create a new one-shot or recurring wakeup. Name, description, and at least one prompt are required, plus exactly one of fire_at or cron_spec. "+
+			"When the wakeup fires, the prompts are sent to the agent one after another in order, in the same fresh context, so the agent sees and remembers what it did and produced in the earlier prompts of this same wakeup — later prompts can build on that. "+
+			"The wakeup starts in a completely fresh context with no memory of the current conversation or any other wakeup, so the first prompt must be fully self-contained and include the complete context, all relevant information, the concrete goal, constraints, and expected result needed to perform it correctly. "+
 			"The user controls the timeout and the agent cannot choose or override it. Every wakeup created by this tool uses a timeout of %s. %s "+
 			"Use action \"remove\" to cancel an existing wakeup by name; protected wakeups cannot be removed this way. "+
 			"Always use %s as timezone for fire_at timestamps; cron_spec also uses %s as timezone.",
@@ -85,10 +86,10 @@ func (WakeupTool) Parameters() map[string]any {
 				"type":        []string{"string", "null"},
 				"description": "Short description of what this wakeup is for and what it should do when it fires. Required for \"add\"; ignored otherwise.",
 			},
-			"tasks": map[string]any{
+			"prompts": map[string]any{
 				"type":        []string{"array", "null"},
 				"items":       map[string]any{"type": "string"},
-				"description": "List of tasks to execute in order when the wakeup fires. Required for \"add\" and must contain at least one entry. Every task must be fully self-contained and include the complete context, all relevant details, the concrete goal, constraints, and expected result. Tasks must not rely on context from other tasks or previous messages.",
+				"description": "One or more prompts sent to the agent in order, one after another, within the same fresh context when the wakeup fires. The agent sees and remembers what it did and produced in the earlier prompts of this list, so later prompts can build on that. The first prompt must be fully self-contained: the agent has no memory of the current conversation or any other wakeup, so it must include all context, relevant details, the concrete goal, constraints, and expected result needed to get started. Required for \"add\" and must contain at least one entry.",
 			},
 			"fire_at": map[string]any{
 				"type":        []string{"string", "null"},
@@ -99,7 +100,7 @@ func (WakeupTool) Parameters() map[string]any {
 				"description": "Cron schedule (e.g. \"0 9 * * 1-5\") for a recurring wakeup. For \"add\", exactly one of fire_at or cron_spec must be set. The schedule uses the configured timezone.",
 			},
 		},
-		"required":             []string{"action", "name", "description", "tasks", "fire_at", "cron_spec"},
+		"required":             []string{"action", "name", "description", "prompts", "fire_at", "cron_spec"},
 		"additionalProperties": false,
 	}
 }
@@ -112,7 +113,7 @@ func (t WakeupTool) Handler() tool.ToolHandler {
 			Action      string   `json:"action"`
 			Name        *string  `json:"name"`
 			Description *string  `json:"description"`
-			Tasks       []string `json:"tasks"`
+			Prompts     []string `json:"prompts"`
 			FireAt      *string  `json:"fire_at"`
 			CronSpec    *string  `json:"cron_spec"`
 		}
@@ -121,10 +122,10 @@ func (t WakeupTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("wakeup: invalid arguments: %w", err)
 		}
 
-		if *args.FireAt == "null" {
+		if args.FireAt != nil && *args.FireAt == "null" {
 			*args.FireAt = ""
 		}
-		if *args.CronSpec == "null" {
+		if args.CronSpec != nil && *args.CronSpec == "null" {
 			*args.CronSpec = ""
 		}
 
@@ -132,7 +133,7 @@ func (t WakeupTool) Handler() tool.ToolHandler {
 		case "list":
 			return t.handleList(handle)
 		case "add":
-			return t.handleAdd(handle, args.Name, args.Description, args.Tasks, args.FireAt, args.CronSpec)
+			return t.handleAdd(handle, args.Name, args.Description, args.Prompts, args.FireAt, args.CronSpec)
 		case "remove":
 			return t.handleRemove(handle, args.Name)
 		default:
@@ -179,7 +180,7 @@ func (t WakeupTool) handleList(handle handles.AgentHandle) (string, error) {
 	return string(result), nil
 }
 
-func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *string, tasks []string, fireAtRaw, cronSpecRaw *string) (string, error) {
+func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *string, prompts []string, fireAtRaw, cronSpecRaw *string) (string, error) {
 	if handle == nil {
 		return "", fmt.Errorf("wakeup: agent handle is nil")
 	}
@@ -190,8 +191,8 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 	if description == nil || strings.TrimSpace(*description) == "" {
 		return "", fmt.Errorf("wakeup: description is required for action \"add\"")
 	}
-	if len(tasks) == 0 {
-		return "", fmt.Errorf("wakeup: tasks must contain at least one entry for action \"add\"")
+	if len(prompts) == 0 {
+		return "", fmt.Errorf("wakeup: prompts must contain at least one entry for action \"add\"")
 	}
 
 	hasFireAt := fireAtRaw != nil && strings.TrimSpace(*fireAtRaw) != ""
@@ -218,7 +219,7 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 	}
 
 	// Protected is always false here - only the system creates protected wakeups, never the agent itself via this tool.
-	w := wakeup.NewWakeUp(*name, *description, handle, fireAt, cronSpec, tasks, t.timeout, false)
+	w := wakeup.NewWakeUp(*name, *description, handle, fireAt, cronSpec, prompts, t.timeout, false)
 
 	if err := handle.AddWakeup(w); err != nil {
 		return "", fmt.Errorf("wakeup: failed to set wakeup: %w", err)
@@ -252,7 +253,7 @@ func (t WakeupTool) handleRemove(handle handles.AgentHandle, name *string) (stri
 	if wu == nil {
 		return "", fmt.Errorf("wakeup: no wakeup named %q", wakeupName)
 	}
-	
+
 	if wu.Protected() || !handle.RemoveWakeup(wakeupName) {
 		return "", fmt.Errorf("wakeup: could not remove wakeup %q (it is probably protected)", wakeupName)
 	}

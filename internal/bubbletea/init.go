@@ -32,7 +32,6 @@ const (
 func newListDelegate() list.ItemDelegate {
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(1)
-	delegate.SetHeight(10)
 	delegate.ShowDescription = true
 
 	// Selektiertes Item: Orange, mit linkem Balken
