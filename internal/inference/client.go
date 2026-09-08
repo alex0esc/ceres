@@ -211,7 +211,6 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 		)
 
 
-		client.partialAnswer = nil
 		var finalOutput []responses.ResponseOutputItemUnion
 		for stream.Next() {
 			event := stream.Current()
@@ -227,12 +226,11 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 				client.triggerOnEvent(token)				
 
 			case responses.ResponseOutputItemAddedEvent: 
-				if _, ok := e.Item.AsAny().(responses.ResponseReasoningItem); ok || e.Item.Type == "reasoningmessage" {
-					continue
+				if _, ok := e.Item.AsAny().(responses.ResponseOutputMessage); ok || e.Item.Type == "message" {
+					token := history.Token { Type: history.TokenEndOfSequence }
+					client.partialAnswer = append(client.partialAnswer, token)
+					client.triggerOnEvent(token)
 				}
-				token := history.Token { Type: history.TokenEndOfSequence }
-				client.partialAnswer = append(client.partialAnswer, token)
-				client.triggerOnEvent(token)
 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls
@@ -267,6 +265,8 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 			return nil, err, false
 		}
 
+
+		client.partialAnswer = nil
 		if !client.handleToolCalls(runCtx, finalOutput, handle, &fullAnswer) {
 			return &fullAnswer, nil, false
 		}

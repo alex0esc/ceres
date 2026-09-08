@@ -54,14 +54,14 @@ func (t WakeupTool) Description() string {
 		repeatNote = "You are permitted to create both one-shot (fire_at) and recurring (cron_spec) wakeups. One of the two fields must be empty."
 	}
 
-	return fmt.Sprintf(
-		"Tool to manage scheduled wakeups. Use action \"list\" to see all currently scheduled wakeups, including protected user-created wakeups which cannot be removed or edited. "+
-			"Use action \"add\" to create a new one-shot or recurring wakeup. Name, description, and at least one prompt are required, plus exactly one of fire_at or cron_spec. "+
+	return fmt.Sprintf("Tool to manage scheduled wakeups. "+
+			"Use action='list' to see all currently scheduled wakeups, including protected user-created wakeups which cannot be removed or edited. List all wakeups before trying to add or remove any wakeups!"+
+			"Use action='add' to create a new one-shot or recurring wakeup. Name, description, and at least one prompt are required, plus exactly one of fire_at or cron_spec. "+
 			"When the wakeup fires, the prompts are sent to the agent one after another in order, in the same fresh context, so the agent sees and remembers what it did and produced in the earlier prompts of this same wakeup — later prompts can build on that. "+
 			"The wakeup starts in a completely fresh context with no memory of the current conversation or any other wakeup, so the first prompt must be fully self-contained and include the complete context, all relevant information, the concrete goal, constraints, and expected result needed to perform it correctly. "+
 			"The user controls the timeout and the agent cannot choose or override it. Every wakeup created by this tool uses a timeout of %s. %s "+
-			"Use action \"remove\" to cancel an existing wakeup by name; protected wakeups cannot be removed this way. "+
-			"Always use %s as timezone for fire_at timestamps; cron_spec also uses %s as timezone.",
+			"Use action='remove' to cancel an existing wakeup by name; protected wakeups cannot be removed this way. "+
+			"Always use %s as timezone for fire_at timestamps; cron_spec also automaticaly uses %s as timezone.",
 		t.timeout.String(),
 		repeatNote,
 		t.defaultTzName,
@@ -76,7 +76,7 @@ func (WakeupTool) Parameters() map[string]any {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        []string{"list", "add", "remove"},
-				"description": "Which operation to perform.",
+				"description": "Which operation to perform. Use list before add or remove!",
 			},
 			"name": map[string]any{
 				"type":        []string{"string", "null"},
