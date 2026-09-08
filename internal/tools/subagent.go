@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -16,9 +15,10 @@ import (
 
 // SubagentTool bundles listing available subagents and submitting tasks to them into a single tool, dispatched via the "action" parameter ("list" or "call").
 // The timeout for subagent calls is controlled by configuration and cannot be chosen by the agent.
+// Every task the calling agent submits must include its own summary_instructions, since the calling
+// agent only ever sees the subagent's final summary, never its raw actions or intermediate steps.
 type SubagentTool struct {
-	summarizePrompt handles.Prompt
-	timeout         time.Duration
+	timeout time.Duration
 }
 
 // NewSubagentTool constructs a SubagentTool, reading all relevant config values once up front.
@@ -26,14 +26,9 @@ func NewSubagentTool() *SubagentTool {
 	cfg := tool.GetToolConfig()
 
 	timeout := config.ReadEntry(cfg, "subagent.timeout", time.Hour*1)
-	summarizePrompt := config.ReadEntry(cfg, "subagent.summarize_prompt",
-		"Summarize all actions and results that have been achieved in the current chat session for your orchestrator agent. "+
-			"IMPORTANT: The summary should contain everything that is needed by the orchestrator agent to evaluate your work. The orchestrator agent should receive a clean, complete answer that it can directly work with.",
-	)
 
 	return &SubagentTool{
-		timeout:         timeout,
-		summarizePrompt: handles.Prompt{Text: summarizePrompt},
+		timeout: timeout,
 	}
 }
 
@@ -45,13 +40,16 @@ func (t *SubagentTool) Description() string {
 	return fmt.Sprintf(
 		"Use action='list' to see all available subagents together with their descriptions and current status; use this first before calling a subagent. "+
 			"Use action='call' with 'tasks' to submit one or more tasks to subagents in parallel. This blocks until all submitted tasks have finished. "+
-			"Each entry in tasks contains an agent and one or more task prompts that are sent to that subagent in order. "+
-			"Every individual task prompt must be fully self-contained and include the complete context, all relevant information, the concrete objective, constraints, assumptions, and expected result needed by the subagent to perform it correctly. "+
-			"Never assume that a subagent remembers context from another task, a previous task, another call, or an earlier conversation unless that context is explicitly included again in the current task prompt. "+
-			"Tasks are useful for splitting a complex piece of work into smaller independent steps, but every step must still contain all context required for that step. "+
-			"A busy subagent is still callable, but its task will be queued and the response may take longer. "+
-			"The timeout for every subagent call is configured by the user and cannot be chosen or overridden by the agent; the configured timeout is %s. "+
-			"The returned message from a subagent is a summary of its actions and results, not necessarily its exact generated response.",
+			"Each entry in tasks contains an agent, one or more task prompts, and a summary_instructions string. "+
+			"Every task must be fully self-contained and include the complete context, all relevant information, the concrete objective, constraints, assumptions, and expected result needed by the subagent to perform it correctly. "+
+			"Never assume that a subagent remembers context from another task, or an earlier conversation unless that context is explicitly included again in the task. " +
+			"One task can contain multiple prompts which are NOT independent of each other. This makes it possible to seperate one complex task into multiple smaller steps the subagent can work thorugh. " +
+			"For parallel execution you have to use multiple subagents in one call, because the subagent call blocks until all agents are finished. For optimal parallelism split the work into tasks of equal size." +
+			"A busy subagent is still callable, but its task will be queued and the response may take longer. The timeout for every subagent call is %s. "+
+			"IMPORTANT: You will only ever see the subagent's final summary, never its raw actions, intermediate steps, or exact generated responses. "+
+			"summary_instructions tells the subagent exactly what to extract into that summary for you — you must formulate it carefully, since anything you don't ask for will likely be missing from what you receive back. "+
+			"Be specific: name the concrete facts, decisions, file paths, values, or conclusions you need, and the level of detail and format you expect (e.g. a short verdict vs. a full report). "+
+			"A vague or generic summary_instructions (e.g. 'summarize what you did') will likely give you an incomplete or unusable result.",
 		t.timeout.String(),
 	)
 }
@@ -66,8 +64,9 @@ func (t *SubagentTool) Parameters() map[string]any {
 				"description": "Which operation to perform: 'list' to list subagents, 'call' to submit tasks to subagents.",
 			},
 			"tasks": map[string]any{
-				"type": "array",
-				"description": "Required for action='call'. List of one or more tasks to submit to subagents. Every task must identify exactly one agent and contain one or more fully self-contained task prompts. Each prompt must repeat all context and requirements needed for that specific step; do not rely on context from another task, previous task, previous call, or earlier conversation. Ignored for action='list'.",
+				"type":        "array",
+				"description": "Required for action='call'. List of one or more tasks to submit to subagents. " +
+					"Every task must identify exactly one agent, contain one or more prompts, and a summary_instructions string. Ignored for action='list'.",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -75,15 +74,20 @@ func (t *SubagentTool) Parameters() map[string]any {
 							"type":        "string",
 							"description": "Name of the subagent that should run this task.",
 						},
-						"tasks": map[string]any{
+						"prompts": map[string]any{
 							"type": "array",
 							"items": map[string]any{
 								"type": "string",
 							},
-							"description": "One or more prompts to send to the selected subagent in order. Every prompt must be fully self-contained and include the complete context, relevant details, concrete objective, constraints, assumptions, and expected result. The subagent must not need information from previous prompts or previous calls to understand the current task.",
+							"description": "One or more prompts (steps) to send to the selected subagent in order. Prompts do not reset the chat and can/should depend on each other!",
+						},
+						"summary_instructions": map[string]any{
+							"type":        "string",
+							"description": "Precise instructions telling the subagent what to include in its final summary to you. " +
+								"You will only see this summary, not the subagent's raw work, so name exactly the facts, decisions, file paths, values, or conclusions you need, plus the expected level of detail and format.",
 						},
 					},
-					"required":             []string{"agent", "tasks"},
+					"required":             []string{"agent", "prompts", "summary_instructions"},
 					"additionalProperties": false,
 				},
 			},
@@ -94,8 +98,9 @@ func (t *SubagentTool) Parameters() map[string]any {
 }
 
 type subagentCallTask struct {
-	Agent string   `json:"agent"`
-	Tasks []string `json:"tasks"`
+	Agent               string   `json:"agent"`
+	Prompts               []string `json:"prompts"`
+	SummaryInstructions string   `json:"summary_instructions"`
 }
 
 type subagentToolArgs struct {
@@ -170,10 +175,19 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 			continue
 		}
 
-		if len(task.Tasks) == 0 {
+		if len(task.Prompts) == 0 {
 			pending = append(pending, pendingCall{
 				agentName: task.Agent,
-				err:       fmt.Errorf("task for agent %q must contain at least 1 task prompt", task.Agent),
+				err:       fmt.Errorf("task for agent %q must contain at least 1 prompt", task.Agent),
+			})
+			continue
+		}
+
+		summaryText := strings.TrimSpace(task.SummaryInstructions)
+		if summaryText == "" {
+			pending = append(pending, pendingCall{
+				agentName: task.Agent,
+				err:       fmt.Errorf("task for agent %q must contain non-empty summary_instructions", task.Agent),
 			})
 			continue
 		}
@@ -187,13 +201,13 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 			continue
 		}
 
-		prompts := make([]handles.Prompt, 0, len(task.Tasks)+1)
+		prompts := make([]handles.Prompt, 0, len(task.Prompts)+1)
 
-		for _, prompt := range task.Tasks {
+		for _, prompt := range task.Prompts {
 			if strings.TrimSpace(prompt) == "" {
 				pending = append(pending, pendingCall{
 					agentName: task.Agent,
-					err:       fmt.Errorf("task for agent %q contains an empty task prompt", task.Agent),
+					err:       fmt.Errorf("task for agent %q contains an empty prompt", task.Agent),
 				})
 				continue
 			}
@@ -205,7 +219,7 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 			continue
 		}
 
-		prompts = append(prompts, t.summarizePrompt)
+		prompts = append(prompts, handles.Prompt{Text: summaryText})
 
 		subTask := handles.TaskClearAskMultiple(prompts, t.timeout)
 		subTask.ParentCtx = ctx
