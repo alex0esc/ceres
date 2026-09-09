@@ -25,7 +25,6 @@ type Discord struct {
 	agentName      string
 	userID         string
 	messageTimeout time.Duration
-	messagePrefix  string
 }
 
 // NewDiscord constructs a Discord platform, reading all relevant config
@@ -40,14 +39,12 @@ func NewDiscord() *Discord {
 	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
 
 	messageTimeout := config.ReadEntry(cfg, "discord.message_timeout", time.Minute * 60)
-	messagePrefix := config.ReadEntry(cfg, "discord.message_prefix", "[Discord DM] ")
 
 	return &Discord{
 		botToken:       botToken,
 		agentName:      agentName,
 		userID:         userID,
 		messageTimeout: messageTimeout,
-		messagePrefix: messagePrefix,
 	}
 }
 
@@ -132,14 +129,8 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 
 	images := d.downloadImageAttachments(m.Attachments)
 
-	msg := ""
-	if m.Content == "" {
-		msg = d.messagePrefix + "The user sent an empty text from discord!"
-	} else {
-		msg = d.messagePrefix + m.Content
-	}
-
-	task := handles.TaskAskSingle(handles.Prompt{Text: msg, Images: images}, d.messageTimeout)
+	
+	task := handles.TaskAskSingle(handles.Prompt{Text: m.Content, Images: images}, d.messageTimeout)
 	resultCh := agent.SubmitTask(task)
 	result := <-resultCh
 	close(stopTyping)
