@@ -80,6 +80,7 @@ func (client *Client) ClearOnEvent() {
 }
 
 
+
 func (client *Client) appendAssistentMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
 	msg.OfMessage.Type = "message"
@@ -87,7 +88,40 @@ func (client *Client) appendAssistentMessage(promt string) {
 }
 
 
+// appendReasoningMessage pushes a native reasoning item back into chatHistory
+// (with encrypted_content when present) so reasoning-mode backends can
+// validate/replay it, instead of flattening the reasoning text into a plain
+func (client *Client) appendReasoningItem(item responses.ResponseReasoningItem) {
+	param := item.ToParam()
+	if client.UseReasoningSummary {
+		for _, si := range item.Summary {
+			param.Summary = append(param.Summary, responses.ResponseReasoningItemSummaryParam{ Text: si.Text })
+		}
+	} else {
+		for _, ci := range item.Content {
+			param.Content = append(param.Content, responses.ResponseReasoningItemContentParam{ Text: ci.Text })
+		}		
+	}
+	client.chatHistory = append(client.chatHistory, responses.ResponseInputItemUnionParam {
+		OfReasoning: &param,
+	})
+}
 
+
+func (client *Client) appendReasoningText(text string) {
+	if text == "" {
+		return
+	}
+
+	reasoning := responses.ResponseReasoningItemParam{ Content: []responses.ResponseReasoningItemContentParam{{Text: text}, }}
+	if client.UseReasoningSummary {
+		reasoning = responses.ResponseReasoningItemParam{ Summary: []responses.ResponseReasoningItemSummaryParam{ {Text: text}, }}
+	}
+
+	client.chatHistory = append(client.chatHistory, responses.ResponseInputItemUnionParam{
+		OfReasoning: &reasoning,
+	})
+}
 
 
 // appends a list of images with a single prompt after them in the history
@@ -140,4 +174,3 @@ func (client *Client) requestOpts() []option.RequestOption {
 	}
 	return opts
 }
-

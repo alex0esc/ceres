@@ -19,6 +19,7 @@ type AgentConfig struct {
 	Endpoint             string         `toml:"endpoint"`
 	ModelName            string         `toml:"model_name"`
 	ExtraBody            map[string]any `toml:"extra_body,omitempty"`
+	ReasoningSummary     bool           `toml:"reasoning_summary"`
 	Name                 string         `toml:"name"`
 	Description          string         `toml:"description"`
 	ReasoningEffort      string         `toml:"reasoning_effort"`
@@ -67,6 +68,7 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 		client.NumMessagesToKeep = cfg.NumMessagesToKeep
 		client.CompressionThreshold = cfg.CompressionThreshold
 		client.CompressionPromt = cfg.CompressionPromt
+		client.UseReasoningSummary = cfg.ReasoningSummary
 
 		// resolve each referenced tool name against the registry
 		for _, toolName := range cfg.Tools {
@@ -135,8 +137,9 @@ func ensureOneAgentFile(dir string) error {
 
 	cfg := AgentConfig{
 		Name:                 "Ceres",
-		ModelName:            "ornith:35b",
-		ExtraBody: nil,
+		ModelName:            "qwen3.8",
+		ExtraBody:            nil,
+		ReasoningSummary:     false,
 		Description:          "The main agent of the system.",
 		ReasoningEffort:      string(responses.ReasoningEffortMedium),
 		SystemPrompt:         "You are <name> a helpful AI assistant.",
