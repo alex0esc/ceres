@@ -19,6 +19,7 @@ type Client struct {
 	endpoint        *Endpoint
 	modelName       string
 	ExtraBody       map[string]any
+	UseReasoningSummary      bool
 
 	// other
 	ReasoningEffort openai.ReasoningEffort
@@ -74,50 +75,33 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 	foundCall := false
 
 
-	var message strings.Builder
 	for _, item := range output {
 		switch v := item.AsAny().(type) {
 
 		//put reasoning in the chat history for the bot to have more context
 		case responses.ResponseReasoningItem:    		
-			var summary strings.Builder
-			for _, part := range v.Content {
-				summary.WriteString(part.Text)
+			if client.UseReasoningSummary {
+				for _, part := range v.Summary {
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ part.Text }})
+				}
+			} else {
+				for _, part := range v.Content {
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ part.Text }})
+				}
 			}
-			for _, part := range v.Summary {
-				summary.WriteString(part.Text)
-			}
-
-			if summary.String() != "" {
-				fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ summary.String() }})
-				message.WriteString("<think>\n")
-				message.WriteString(summary.String())
-				message.WriteString("\n</think>\n\n")
-			}
+			client.appendReasoningItem(v)
 
 			
 		case responses.ResponseOutputMessage:
-			var complete strings.Builder
 			for _, part := range v.Content {
 				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
-					complete.WriteString(t.Text)
+					client.appendAssistentMessage(t.Text)
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistent, Content: []string{ t.Text }})
 				}
 			}
-			if len(complete.String()) > 0 {
-				fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistent, Content: []string{ complete.String() }})
-				message.WriteString(complete.String())
-			}
-			if message.Len() > 0 {
-				client.appendAssistentMessage(message.String())
-				message.Reset()
-			}
+
 
 		case responses.ResponseFunctionToolCall:
-			if message.Len() > 0 {
-				client.appendAssistentMessage(message.String())
-				message.Reset()
-			}
-			
 			foundCall = true
 
 			client.chatHistory = append(client.chatHistory,
@@ -155,10 +139,6 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			client.triggerOnEvent(history.Token {Type: history.TokenEndOfSequence })
 
 		}
-	}
-	if message.Len() > 0 {
-		client.appendAssistentMessage(message.String())
-		message.Reset()
 	}
 	return foundCall
 }
@@ -215,7 +195,18 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 		for stream.Next() {
 			event := stream.Current()
 			switch e := event.AsAny().(type) {
-			case responses.ResponseReasoningTextDeltaEvent, responses.ResponseReasoningSummaryTextDeltaEvent:
+			case responses.ResponseReasoningSummaryTextDeltaEvent:
+				if !client.UseReasoningSummary {
+					continue
+				}
+				token := history.Token {Type: history.TokenTypeReasoning, Content: []string { event.Delta } }
+				client.partialAnswer = append(client.partialAnswer, token)
+				client.triggerOnEvent(token)				
+
+			case responses.ResponseReasoningTextDeltaEvent: 
+				if client.UseReasoningSummary {
+					continue
+				}
 				token := history.Token {Type: history.TokenTypeReasoning, Content: []string { event.Delta } }
 				client.partialAnswer = append(client.partialAnswer, token)
 				client.triggerOnEvent(token)				
@@ -253,8 +244,9 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 				}
 			}
 			if reason.Len() > 0 {
-				client.appendAssistentMessage("<think>\n" + reason.String() + "\n</think>\n\n" + normal.String())
-			} else if normal.Len() > 0 {
+				client.appendReasoningText(reason.String())
+			}
+			if normal.Len() > 0 {
 				client.appendAssistentMessage(normal.String())
 			}
 			return &fullAnswer, nil, true
