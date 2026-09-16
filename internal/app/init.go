@@ -133,7 +133,8 @@ func registerInternalTools() {
 	tool.Register(tools.NewMemoryEditTool())
 	tool.Register(tools.NewSubagentTool())
 	tool.Register(tools.NewViewImageTool())
-	tool.Register(tools.NewWakeupTool())
+	tool.Register(tools.NewWakeupReadTool())
+	tool.Register(tools.NewWakeupEditTool())
 }
 
 

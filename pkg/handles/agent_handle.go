@@ -46,6 +46,7 @@ type WakeupHandle interface {
 	FireAt() *time.Time
 	CroneSpec() string
 	Protected() bool
+	Prompts() []string
 }
 
 
