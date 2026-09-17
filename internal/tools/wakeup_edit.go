@@ -1,5 +1,5 @@
-package tools
 
+package tools
 
 import (
 	"context"
@@ -14,18 +14,18 @@ import (
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
-// WakeupTool lets an agent list, create, and remove its own scheduled wakeups.
+// WakeupEditTool lets an agent create and remove its own scheduled wakeups.
 // Whether it may create recurring (cron-based) wakeups, as opposed to only one-shot ones, is controlled via config.
 // The timeout for wakeups is controlled by the user via configuration and cannot be chosen by the agent.
-type WakeupTool struct {
+type WakeupEditTool struct {
 	canCreateRepeatable bool
 	defaultTzName       string
 	timeout             time.Duration
 }
 
-// NewWakeupTool constructs a WakeupTool, reading all relevant config values once up front.
+// NewWakeupEditTool constructs a WakeupEditTool, reading all relevant config values once up front.
 // The wakeup timeout is configured via "wakeup.timeout" and defaults to one hour if no valid value is configured.
-func NewWakeupTool() WakeupTool {
+func NewWakeupEditTool() WakeupEditTool {
 	cfg := tool.GetToolConfig()
 
 	tzName := config.ReadEntry(cfg, "timezone", "Local")
@@ -37,30 +37,29 @@ func NewWakeupTool() WakeupTool {
 		timeout = time.Hour
 	}
 
-	return WakeupTool{
+	return WakeupEditTool{
 		canCreateRepeatable: canCreateRepeatable,
 		defaultTzName:       tzName,
 		timeout:             timeout,
 	}
 }
 
-func (WakeupTool) Name() string {
-	return "wakeup"
+func (WakeupEditTool) Name() string {
+	return "wakeup_edit"
 }
 
-func (t WakeupTool) Description() string {
+func (t WakeupEditTool) Description() string {
 	repeatNote := "You are not permitted to create recurring wakeups; cron_spec must be left empty and only fire_at may be used."
 	if t.canCreateRepeatable {
 		repeatNote = "You are permitted to create both one-shot (fire_at) and recurring (cron_spec) wakeups. One of the two fields must be empty."
 	}
 
-	return fmt.Sprintf("Tool to manage scheduled wakeups. "+
-			"Use action='list' to see all currently scheduled wakeups, including protected user-created wakeups which cannot be removed or edited. List all wakeups before trying to add or remove any wakeups!"+
+	return fmt.Sprintf("Tool to create and remove scheduled wakeups. Always use wakeup_read to list all currently scheduled wakeups before trying to add or remove any wakeup! "+
 			"Use action='add' to create a new one-shot or recurring wakeup. Name, description, and at least one prompt are required, plus exactly one of fire_at or cron_spec. "+
 			"When the wakeup fires, the prompts are sent to the agent one after another in order, in the same fresh context, so the agent sees and remembers what it did and produced in the earlier prompts of this same wakeup — later prompts can build on that. "+
 			"The wakeup starts in a completely fresh context with no memory of the current conversation or any other wakeup, so the first prompt must be fully self-contained and include the complete context, all relevant information, the concrete goal, constraints, and expected result needed to perform it correctly. "+
 			"The user controls the timeout and the agent cannot choose or override it. Every wakeup created by this tool uses a timeout of %s. %s "+
-			"Use action='remove' to cancel an existing wakeup by name; protected wakeups cannot be removed this way. "+
+			"Use action='remove' to cancel an existing wakeup by name; protected wakeups (see wakeup_read) cannot be removed this way. "+
 			"Always use %s as timezone for fire_at timestamps; cron_spec also automaticaly uses %s as timezone.",
 		t.timeout.String(),
 		repeatNote,
@@ -69,18 +68,18 @@ func (t WakeupTool) Description() string {
 	)
 }
 
-func (WakeupTool) Parameters() map[string]any {
+func (WakeupEditTool) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type":        "string",
-				"enum":        []string{"list", "add", "remove"},
-				"description": "Which operation to perform. Use list before add or remove!",
+				"enum":        []string{"add", "remove"},
+				"description": "Which operation to perform. Use wakeup_read to list existing wakeups before add or remove!",
 			},
 			"name": map[string]any{
 				"type":        []string{"string", "null"},
-				"description": "Unique name of the wakeup. Required for \"add\" and \"remove\"; ignored for \"list\".",
+				"description": "Unique name of the wakeup. Required for \"add\" and \"remove\".",
 			},
 			"description": map[string]any{
 				"type":        []string{"string", "null"},
@@ -105,7 +104,7 @@ func (WakeupTool) Parameters() map[string]any {
 	}
 }
 
-func (t WakeupTool) Handler() tool.ToolHandler {
+func (t WakeupEditTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		_ = ctx
 
@@ -119,7 +118,7 @@ func (t WakeupTool) Handler() tool.ToolHandler {
 		}
 
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
-			return "", fmt.Errorf("wakeup: invalid arguments: %w", err)
+			return "", fmt.Errorf("wakeup_edit: invalid arguments: %w", err)
 		}
 
 		if args.FireAt != nil && *args.FireAt == "null" {
@@ -130,79 +129,39 @@ func (t WakeupTool) Handler() tool.ToolHandler {
 		}
 
 		switch args.Action {
-		case "list":
-			return t.handleList(handle)
 		case "add":
 			return t.handleAdd(handle, args.Name, args.Description, args.Prompts, args.FireAt, args.CronSpec)
 		case "remove":
 			return t.handleRemove(handle, args.Name)
 		default:
-			return "", fmt.Errorf("wakeup: unknown action %q, must be one of: list, add, remove", args.Action)
+			return "", fmt.Errorf("wakeup_edit: unknown action %q, must be one of: add, remove", args.Action)
 		}
 	}
 }
 
-func (t WakeupTool) handleList(handle handles.AgentHandle) (string, error) {
+func (t WakeupEditTool) handleAdd(handle handles.AgentHandle, name, description *string, prompts []string, fireAtRaw, cronSpecRaw *string) (string, error) {
 	if handle == nil {
-		return "", fmt.Errorf("wakeup: agent handle is nil")
-	}
-
-	wakeups := handle.ListWakeups()
-
-	type entry struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		FireAt      string `json:"fire_at,omitempty"`
-		CronSpec    string `json:"cron_spec,omitempty"`
-		Protected   bool   `json:"protected"`
-	}
-
-	out := make([]entry, 0, len(wakeups))
-
-	for _, w := range wakeups {
-		if w == nil {
-			continue
-		}
-
-		e := entry{Name: w.Name(), Description: w.Description(), CronSpec: w.CroneSpec(), Protected: w.Protected()}
-		if fireAt := w.FireAt(); fireAt != nil {
-			e.FireAt = fireAt.Format(time.RFC3339)
-		}
-
-		out = append(out, e)
-	}
-
-	result, err := json.Marshal(out)
-	if err != nil {
-		return "", fmt.Errorf("wakeup: failed to marshal result: %w", err)
-	}
-
-	return string(result), nil
-}
-
-func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *string, prompts []string, fireAtRaw, cronSpecRaw *string) (string, error) {
-	if handle == nil {
-		return "", fmt.Errorf("wakeup: agent handle is nil")
+		return "", fmt.Errorf("wakeup_edit: agent handle is nil")
 	}
 
 	if name == nil || strings.TrimSpace(*name) == "" {
-		return "", fmt.Errorf("wakeup: name is required for action \"add\"")
+		return "", fmt.Errorf("wakeup_edit: name is required for action \"add\"")
 	}
 	if description == nil || strings.TrimSpace(*description) == "" {
-		return "", fmt.Errorf("wakeup: description is required for action \"add\"")
+		return "", fmt.Errorf("wakeup_edit: description is required for action \"add\"")
 	}
 	if len(prompts) == 0 {
-		return "", fmt.Errorf("wakeup: prompts must contain at least one entry for action \"add\"")
+		return "", fmt.Errorf("wakeup_edit: prompts must contain at least one entry for action \"add\"")
 	}
 
 	hasFireAt := fireAtRaw != nil && strings.TrimSpace(*fireAtRaw) != ""
 	hasCron := cronSpecRaw != nil && strings.TrimSpace(*cronSpecRaw) != ""
 
 	if hasFireAt == hasCron {
-		return "", fmt.Errorf("wakeup: exactly one of fire_at or cron_spec must be set for action \"add\"")
+		return "", fmt.Errorf("wakeup_edit: exactly one of fire_at or cron_spec must be set for action \"add\"")
 	}
 	if hasCron && !t.canCreateRepeatable {
-		return "", fmt.Errorf("wakeup: this agent is not allowed to create recurring wakeups")
+		return "", fmt.Errorf("wakeup_edit: this agent is not allowed to create recurring wakeups")
 	}
 
 	var fireAt *time.Time
@@ -211,7 +170,7 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 	if hasFireAt {
 		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*fireAtRaw))
 		if err != nil {
-			return "", fmt.Errorf("wakeup: invalid fire_at %q, expected RFC3339 (e.g. \"2026-10-24T22:05:00+02:00\"): %w", *fireAtRaw, err)
+			return "", fmt.Errorf("wakeup_edit: invalid fire_at %q, expected RFC3339 (e.g. \"2026-10-24T22:05:00+02:00\"): %w", *fireAtRaw, err)
 		}
 		fireAt = &parsed
 	} else {
@@ -222,7 +181,7 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 	w := wakeup.NewWakeUp(*name, *description, handle, fireAt, cronSpec, prompts, t.timeout, false)
 
 	if err := handle.AddWakeup(w); err != nil {
-		return "", fmt.Errorf("wakeup: failed to set wakeup: %w", err)
+		return "", fmt.Errorf("wakeup_edit: failed to set wakeup: %w", err)
 	}
 
 	result := struct {
@@ -232,30 +191,30 @@ func (t WakeupTool) handleAdd(handle handles.AgentHandle, name, description *str
 
 	out, err := json.Marshal(result)
 	if err != nil {
-		return "", fmt.Errorf("wakeup: failed to marshal result: %w", err)
+		return "", fmt.Errorf("wakeup_edit: failed to marshal result: %w", err)
 	}
 
 	return string(out), nil
 }
 
-func (t WakeupTool) handleRemove(handle handles.AgentHandle, name *string) (string, error) {
+func (t WakeupEditTool) handleRemove(handle handles.AgentHandle, name *string) (string, error) {
 	if handle == nil {
-		return "", fmt.Errorf("wakeup: agent handle is nil")
+		return "", fmt.Errorf("wakeup_edit: agent handle is nil")
 	}
 
 	if name == nil || strings.TrimSpace(*name) == "" {
-		return "", fmt.Errorf("wakeup: name is required for action \"remove\"")
+		return "", fmt.Errorf("wakeup_edit: name is required for action \"remove\"")
 	}
 
 	wakeupName := strings.TrimSpace(*name)
 
 	wu := handle.GetWakeup(wakeupName)
 	if wu == nil {
-		return "", fmt.Errorf("wakeup: no wakeup named %q", wakeupName)
+		return "", fmt.Errorf("wakeup_edit: no wakeup named %q", wakeupName)
 	}
 
 	if wu.Protected() || !handle.RemoveWakeup(wakeupName) {
-		return "", fmt.Errorf("wakeup: could not remove wakeup %q (it is probably protected)", wakeupName)
+		return "", fmt.Errorf("wakeup_edit: could not remove wakeup %q (it is probably protected)", wakeupName)
 	}
 
 	result := struct {
@@ -265,7 +224,7 @@ func (t WakeupTool) handleRemove(handle handles.AgentHandle, name *string) (stri
 
 	out, err := json.Marshal(result)
 	if err != nil {
-		return "", fmt.Errorf("wakeup: failed to marshal result: %w", err)
+		return "", fmt.Errorf("wakeup_edit: failed to marshal result: %w", err)
 	}
 
 	return string(out), nil

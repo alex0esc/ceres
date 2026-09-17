@@ -60,14 +60,15 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "ctrl+c":
-		tui.selectedAgent.Client.ClearOnEvent()
+		if tui.selectedAgent != nil {
+			tui.selectedAgent.Client.ClearOnEvent()
+		}
 		return tea.Quit
 	case "tab":
 		tui.toggleFocus()
 	case "enter":
 		tui.handleEnter()
 	}
-	tui.applyListSelection()
 	return nil
 }
 
@@ -88,8 +89,7 @@ func (tui *Tui) handleEnter() {
 	case focusInput:
 		tui.submitMessage()
 	case focusList:
-		tui.loadAgentHistory()
-		tui.viewport.SetContent(tui.getContentString())
+		tui.applyListSelection()
 	}
 }
 
@@ -126,9 +126,6 @@ func (tui *Tui) submitMessage() {
 // feeds the current list element into the text field
 func (tui *Tui) applyListSelection() {
 	if selected, ok := tui.list.SelectedItem().(listItem); ok {
-		if tui.selectedAgent != nil && tui.selectedAgent.Name() == selected.botName {
-			return
-		}
 		old := tui.selectedAgent
 		if old != nil {
 			old.Client.ClearOnEvent()
@@ -137,9 +134,9 @@ func (tui *Tui) applyListSelection() {
 		tui.selectedAgent.Client.SetOnEvent(func(token history.Token) {
 			tui.inputChan <- token
 		})
-		tui.loadAgentHistory()
-		tui.viewport.SetContent(tui.getContentString())
 	}
+	tui.loadAgentHistory()
+	tui.viewport.SetContent(tui.getContentString())
 }
 
 // changes the size of the components accordingly
@@ -185,13 +182,11 @@ func (tui *Tui) handleTokenMsg(token history.Token) {
 }
 
 
-
-
 func (tui *Tui) waitForToken() tea.Cmd {
 	return func() tea.Msg {
 		var first history.Token		
 		if tui.pendingToken != nil {
-			first = *tui.pendingToken
+			first = tui.pendingToken.Copy()
 			tui.pendingToken = nil
 		} else {
 			first = (<-tui.inputChan).Copy()

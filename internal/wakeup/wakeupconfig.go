@@ -20,7 +20,7 @@ type WakeupEntry struct {
 	CronSpec string     `toml:"cron_spec,omitempty"` // recurring
 
 	Description string   `toml:"description"`
-	Task        []string `toml:"task"`
+	Prompts        []string `toml:"prompts"`
 	Timeout     string   `toml:"timeout"` // e.g. "20m", parsed via time.ParseDuration
 
 	Protected bool      `toml:"protected"`
@@ -56,7 +56,7 @@ func LoadWakeupsForAgent(ag handles.AgentHandle) (map[string]*WakeUp, error) {
 		if we.Name == "" {
 			return nil, fmt.Errorf("invalid wakeup at index %d in %q: missing name", i, path)
 		}
-		if len(we.Task) == 0 {
+		if len(we.Prompts) == 0 {
 			return nil, fmt.Errorf("wakeup %q: missing at least one entry in task", we.Name)
 		}
 		if we.Timeout == "" {
@@ -74,13 +74,14 @@ func LoadWakeupsForAgent(ag handles.AgentHandle) (map[string]*WakeUp, error) {
 			return nil, fmt.Errorf("wakeup %q: exactly one of fire_at or cron_spec must be set", we.Name)
 		}
 
+		
 		wakeups[we.Name] = NewWakeUp(
 			we.Name,
 			we.Description,
 			ag,
 			we.FireAt,
 			we.CronSpec,
-			we.Task,
+			we.Prompts,
 			timeout,
 			we.Protected,
 		)
@@ -96,7 +97,7 @@ func setWakeup(ag handles.AgentHandle, entry WakeupEntry) error {
 	if entry.Name == "" {
 		return fmt.Errorf("wakeup: missing name")
 	}
-	if len(entry.Task) == 0 {
+	if len(entry.Prompts) == 0 {
 		return fmt.Errorf("wakeup %q: missing at least one entry in task", entry.Name)
 	}
 	hasFireAt := entry.FireAt != nil

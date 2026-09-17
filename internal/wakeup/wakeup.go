@@ -18,7 +18,7 @@ type WakeUp struct {
 	agent       handles.AgentHandle
 	fireAt      *time.Time
 	cronSpec    string
-	task        []string // list of prompts, worked through in order
+	prompts        []string // list of prompts, worked through in order
 	timeout     time.Duration
 	protected   bool
 
@@ -35,7 +35,7 @@ func NewWakeUp(
 	ag handles.AgentHandle,
 	fireAt *time.Time,
 	cronSpec string,
-	task []string,
+	prompts []string,
 	timeout time.Duration,
 	protected bool,
 ) *WakeUp {
@@ -45,7 +45,7 @@ func NewWakeUp(
 		agent:       ag,
 		fireAt:      fireAt,
 		cronSpec:    cronSpec,
-		task:        task,
+		prompts:     prompts,
 		timeout:     timeout,
 		protected:   protected,
 	}
@@ -56,6 +56,7 @@ func (w *WakeUp) Description() string { return w.description }
 func (w *WakeUp) FireAt() *time.Time  { return w.fireAt }
 func (w *WakeUp) CroneSpec() string   { return w.cronSpec }
 func (w *WakeUp) Protected() bool { return w.protected }
+func (w *WakeUp) Prompts() []string { return w.prompts }
 
 
 // Running reports whether the wakeup is currently scheduled (Start was
@@ -67,8 +68,8 @@ func (w *WakeUp) Running() bool {
 }
 
 func (w *WakeUp) Execute() {
-	prompts := make([]handles.Prompt, 0, len(w.task))
-	for _, p := range w.task {
+	prompts := make([]handles.Prompt, 0, len(w.prompts))
+	for _, p := range w.prompts {
 		prompts = append(prompts, handles.Prompt{Text: p})
 	}
 	task := handles.TaskClearAskMultiple(prompts, w.timeout)
@@ -143,7 +144,7 @@ func (w *WakeUp) Save() error {
 		FireAt:      w.fireAt,
 		CronSpec:    w.cronSpec,
 		Description: w.description,
-		Task:        w.task,
+		Prompts:        w.prompts,
 		Timeout:     w.timeout.String(),
 		Protected:   w.protected,
 	}
