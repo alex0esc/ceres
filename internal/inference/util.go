@@ -1,6 +1,8 @@
 package inference
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/alex0esc/ceres/internal/history"
@@ -8,7 +10,9 @@ import (
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared/constant"
 )
 
 // RegisterTool adds a callable tool to the client.
@@ -108,15 +112,33 @@ func (client *Client) appendReasoningItem(item responses.ResponseReasoningItem) 
 }
 
 
+func generateReasoningID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "rs_fallback"
+	}
+	return "rs_" + hex.EncodeToString(b)
+}
+
+
 func (client *Client) appendReasoningText(text string) {
 	if text == "" {
 		return
 	}
 
-	reasoning := responses.ResponseReasoningItemParam{ Content: []responses.ResponseReasoningItemContentParam{{Text: text}, }}
+	reasoning := responses.ResponseReasoningItemParam{}
+	reasoning.ID = generateReasoningID()
+	reasoning.Type = constant.ValueOf[constant.Reasoning]()
+	reasoning.EncryptedContent = param.NewOpt("")
+
 	if client.UseReasoningSummary {
-		reasoning = responses.ResponseReasoningItemParam{ Summary: []responses.ResponseReasoningItemSummaryParam{ {Text: text}, }}
+		reasoning.Summary = []responses.ResponseReasoningItemSummaryParam{ {Text: text}, }
+		reasoning.Content = []responses.ResponseReasoningItemContentParam{}
+	} else {
+		reasoning.Content = []responses.ResponseReasoningItemContentParam{{Text: text}, } 
+		reasoning.Summary = []responses.ResponseReasoningItemSummaryParam{}
 	}
+
 
 	client.chatHistory = append(client.chatHistory, responses.ResponseInputItemUnionParam{
 		OfReasoning: &reasoning,
