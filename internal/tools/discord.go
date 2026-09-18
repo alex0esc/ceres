@@ -130,6 +130,10 @@ type discordToolArgs struct {
 
 func (t *DiscordTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
+		if t.session == nil {
+			return "", fmt.Errorf("discord: invalid discord session")
+		}
+
 		var args discordToolArgs
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("discord: invalid arguments: %w", err)

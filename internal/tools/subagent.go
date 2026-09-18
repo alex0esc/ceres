@@ -203,16 +203,22 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 
 		prompts := make([]handles.Prompt, 0, len(task.Prompts)+1)
 
+		invalidPrompt := false
+
 		for _, prompt := range task.Prompts {
 			if strings.TrimSpace(prompt) == "" {
 				pending = append(pending, pendingCall{
 					agentName: task.Agent,
 					err:       fmt.Errorf("task for agent %q contains an empty prompt", task.Agent),
 				})
-				continue
+				invalidPrompt = true
+				break
 			}
-
 			prompts = append(prompts, handles.Prompt{Text: prompt})
+		}
+
+		if invalidPrompt {
+			continue
 		}
 
 		if len(prompts) == 0 {
@@ -254,10 +260,11 @@ func (t *SubagentTool) subagentCall(ctx context.Context, tasks []subagentCallTas
 			continue
 		}
 
-		filtered := result.Response.Filter(history.EntryTypeAssistent)
+		filtered := result.Response.Filter(history.EntryTypeAssistant)
 
 		if len(filtered.Entries) > 0 {
-			fmt.Fprintf(&sb, "%s\n\n", filtered.LastEntry().String())
+ 			_, last := filtered.LastEntry()
+			fmt.Fprintf(&sb, "%s\n\n", last.String())
 		} else {
 			fmt.Fprintf(&sb, "Agent returned an empty result!\n\n")
 		}

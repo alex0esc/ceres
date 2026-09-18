@@ -96,7 +96,7 @@ func (t WakeupReadTool) handleList(handle handles.AgentHandle) (string, error) {
 			continue
 		}
 
-		e := entry{Name: w.Name(), Description: w.Description(), CronSpec: w.CroneSpec(), Protected: w.Protected()}
+		e := entry{Name: w.Name(), Description: w.Description(), CronSpec: w.CronSpec(), Protected: w.Protected()}
 		if fireAt := w.FireAt(); fireAt != nil {
 			e.FireAt = fireAt.Format(time.RFC3339)
 		}

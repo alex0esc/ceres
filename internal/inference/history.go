@@ -71,7 +71,7 @@ func (client *Client) GetHistory() *history.History {
 				// Assistant message contains only normal assistant text.
 				if text := content.OfString.String(); text != "" {
 					hist.Push(history.Entry{
-						Type:    history.EntryTypeAssistent,
+						Type:    history.EntryTypeAssistant,
 						Content: []string{text},
 					})
 				}

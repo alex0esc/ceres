@@ -43,7 +43,7 @@ func handleWakeup(agent handles.AgentHandle, args []string) string {
 
 			if fireAt := wakeup.FireAt(); fireAt != nil {
 				fmt.Fprintf(&b, "**Runs at:** %s\n", fireAt.Format(time.RFC3339))
-			} else if cronSpec := strings.TrimSpace(wakeup.CroneSpec()); cronSpec != "" {
+			} else if cronSpec := strings.TrimSpace(wakeup.CronSpec()); cronSpec != "" {
 				fmt.Fprintf(&b, "**Schedule:** `%s`\n", cronSpec)
 			}
 

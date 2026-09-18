@@ -3,84 +3,87 @@ package bubbletea
 import (
 	"log"
 
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // necessary update method for the tea programm
 func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-
-	// Enter/Shift+Enter im Input-Fokus werden komplett selbst behandelt
-	// (submit bzw. manuelles Einfügen von \n), damit die Textarea nicht
-	// zusätzlich noch einen eigenen Zeilenumbruch einfügt.
-	if km, ok := msg.(tea.KeyMsg); ok && tui.focus == focusInput {
-		switch km.String() {
-		case "enter":
-			cmd := tui.handleKeyMsg(km)
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-			return tui, tea.Batch(cmds...)
-		
-		case "down":
-			if tui.textarea.Line() == tui.textarea.LineCount()-1 {
-				tui.textarea.CursorEnd()
-				tui.textarea.InsertString("\n")
-				return tui, tea.Batch(cmds...)
-			}
-		}	
-
-	}
-
-	cmd := tui.updateFocusedComponent(msg)
-	cmds = append(cmds, cmd)
-	tui.viewport, cmd = tui.viewport.Update(msg)
-	cmds = append(cmds, cmd)
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		cmd := tui.handleKeyMsg(msg)
+	case tea.KeyPressMsg:
+		cmd, handled := tui.handleKeyMsg(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+		if handled {
+			return tui, tea.Batch(cmds...)
+		}
+
 	case tea.WindowSizeMsg:
 		tui.handleWindowSizeMsg(msg)
+
 	case history.Token:
 		tui.handleTokenMsg(msg)
 		cmds = append(cmds, tui.waitForToken())
 	}
+
+	// tea.PasteMsg (Bracketed Paste) läuft hier automatisch mit durch
+	// und wird von der fokussierten Textarea eingefügt.
+	if cmd := tui.updateFocusedComponent(msg); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	var cmd tea.Cmd
+	tui.viewport, cmd = tui.viewport.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
 	return tui, tea.Batch(cmds...)
 }
 
 // to handle global key presses
-func (tui *Tui) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+func (tui *Tui) handleKeyMsg(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+c":
 		if tui.selectedAgent != nil {
 			tui.selectedAgent.Client.ClearOnEvent()
 		}
-		return tea.Quit
+		return tea.Quit, true
+
 	case "tab":
-		tui.toggleFocus()
+		return tui.toggleFocus(), true
+
 	case "enter":
 		tui.handleEnter()
+		return nil, true
+
+	case "down":
+		if tui.focus == focusInput &&
+			tui.textarea.Line() == tui.textarea.LineCount()-1 {
+			tui.textarea.CursorEnd()
+			tui.textarea.InsertString("\n")
+			return nil, true
+		}
 	}
-	return nil
+
+	return nil, false
 }
 
 // changes the focues between the two fields
-func (tui *Tui) toggleFocus() {
+func (tui *Tui) toggleFocus() tea.Cmd {
 	if tui.focus == focusInput {
 		tui.focus = focusList
 		tui.textarea.Blur()
-	} else {
-		tui.focus = focusInput
-		tui.textarea.Focus()
+		return nil
 	}
+	tui.focus = focusInput
+	return tui.textarea.Focus() // Cmd startet das Cursor-Blinken neu
 }
 
 // handles the enter key press
@@ -147,7 +150,10 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	tui.rendererAgent = tui.newRendererAgent(rightWidth)
 	if !tui.ready {
 		tui.applyListSelection()
-		tui.viewport = viewport.New(rightWidth, viewportHeight)
+		tui.viewport = viewport.New(
+			viewport.WithWidth(rightWidth),
+			viewport.WithHeight(viewportHeight),
+		)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
 		tui.viewport.KeyMap.HalfPageDown.SetEnabled(false) // d
@@ -156,10 +162,12 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 		tui.viewport.KeyMap.PageUp.SetEnabled(false)       // b / pgup
 		tui.viewport.KeyMap.Down.SetEnabled(false)
 		tui.viewport.KeyMap.Up.SetEnabled(false)
+		tui.viewport.KeyMap.Left.SetEnabled(false)
+		tui.viewport.KeyMap.Right.SetEnabled(false)
 		tui.ready = true
 	} else {
-		tui.viewport.Width = rightWidth
-		tui.viewport.Height = viewportHeight
+		tui.viewport.SetWidth(rightWidth)
+		tui.viewport.SetHeight(viewportHeight)
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
@@ -173,7 +181,7 @@ func (tui *Tui) handleTokenMsg(token history.Token) {
 	case history.TokenEndOfSequence:
 		tui.mergeTokens()
 	default:
-		if token.Type != history.TokenTypeReasoning || tui.showReasoning { 
+		if token.Type != history.TokenTypeReasoning || tui.showReasoning {
 			tui.tokens = append(tui.tokens, token)
 		}
 	}
@@ -181,22 +189,21 @@ func (tui *Tui) handleTokenMsg(token history.Token) {
 	tui.viewport.GotoBottom()
 }
 
-
 func (tui *Tui) waitForToken() tea.Cmd {
 	return func() tea.Msg {
-		var first history.Token		
+		var first history.Token
 		if tui.pendingToken != nil {
 			first = tui.pendingToken.Copy()
 			tui.pendingToken = nil
 		} else {
 			first = (<-tui.inputChan).Copy()
 		}
-		
+
 		if first.Type != history.TokenTypeReasoning &&
-			first.Type != history.TokenTypeAssistent {
+			first.Type != history.TokenTypeAssistant {
 			return first
 		}
-		
+
 		for {
 			select {
 			case token := <-tui.inputChan:
@@ -212,7 +219,6 @@ func (tui *Tui) waitForToken() tea.Cmd {
 		}
 	}
 }
-
 
 // updates the focused components based on their librarie
 func (tui *Tui) updateFocusedComponent(msg tea.Msg) tea.Cmd {

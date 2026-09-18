@@ -55,7 +55,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 	return &Client{
 		modelName:         modelName,
 		ReasoningEffort:   responses.ReasoningEffortNone,
-		SystemPrompt:      "Your are Ceres a helpful AI assistent.",
+		SystemPrompt:      "Your are Ceres a helpful AI assistant.",
 		MaxToolIterations: 30,
 		endpoint: endpoint,
 		CompressionThreshold: 200000,
@@ -95,8 +95,8 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 		case responses.ResponseOutputMessage:
 			for _, part := range v.Content {
 				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
-					client.appendAssistentMessage(t.Text)
-					fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistent, Content: []string{ t.Text }})
+					client.appendAssistantMessage(t.Text)
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistant, Content: []string{ t.Text }})
 				}
 			}
 
@@ -212,7 +212,7 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 				client.triggerOnEvent(token)				
 
 			case responses.ResponseTextDeltaEvent:
-				token := history.Token {Type: history.TokenTypeAssistent, Content: []string { event.Delta } }
+				token := history.Token {Type: history.TokenTypeAssistant, Content: []string { event.Delta } }
 				client.partialAnswer = append(client.partialAnswer, token)
 				client.triggerOnEvent(token)				
 
@@ -239,7 +239,7 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 				switch token.Type {
 				case history.TokenTypeReasoning:
 					reason.WriteString(token.Content[0])
-				case history.TokenTypeAssistent:
+				case history.TokenTypeAssistant:
 					normal.WriteString(token.Content[0])
 				}
 			}
@@ -247,7 +247,7 @@ func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, hand
 				client.appendReasoningText(reason.String())
 			}
 			if normal.Len() > 0 {
-				client.appendAssistentMessage(normal.String())
+				client.appendAssistantMessage(normal.String())
 			}
 			return &fullAnswer, nil, true
 		}

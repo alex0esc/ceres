@@ -14,11 +14,11 @@ func (history *History) Push(entry Entry) {
 	history.Entries = append(history.Entries, entry)
 }
 
-func (history *History) Append(other *History) {
-	for _, entry := range other.Entries {
-		history.Entries = append(history.Entries, entry)
-	}
+
+func (history *History) Append(other History) {
+	history.Entries = append(history.Entries, other.Entries...)
 }
+
 
 func (history *History) All() iter.Seq[Entry] {
 	return func(yield func(Entry) bool) {
@@ -42,8 +42,8 @@ func (history *History) String() string {
 }
 
 
-func (history *History) Filter(types ...EntryType) *History {
-	filtered := &History{}
+func (history *History) Filter(types ...EntryType) History {
+	filtered := History{}
 
 	for _, entry := range history.Entries {
 		keep := slices.Contains(types, entry.Type)
@@ -56,6 +56,10 @@ func (history *History) Filter(types ...EntryType) *History {
 	return filtered
 }
 
-func (history *History) LastEntry() *Entry {
-	return &history.Entries[len(history.Entries) - 1]
+
+func (history *History) LastEntry() (bool, Entry) {
+	if len(history.Entries) == 0 {
+		return false, Entry{} 
+	}
+	return true, history.Entries[len(history.Entries)-1]
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -88,7 +88,7 @@ func (tui *Tui) loadAgentHistory() {
 	histroy := tui.selectedAgent.Client.GetHistory()
 	for entry := range histroy.All() {
 		switch entry.Type {
-		case history.EntryTypeAssistent:			
+		case history.EntryTypeAssistant:			
 			tui.appendAgentMessage(entry.String())
 		case history.EntryTypeUser:
 			tui.appendUserMessage(entry.String())
@@ -150,7 +150,7 @@ func (tui *Tui) mergeTokens() {
 		text.WriteString(token.String())
 	}
 	switch tui.tokens[0].Type {
-	case history.TokenTypeAssistent, history.TokenEndOfSequence: 
+	case history.TokenTypeAssistant, history.TokenEndOfSequence: 
 		tui.appendAgentMessage(text.String())
 	case history.TokenTypeUser: 
 		tui.appendUserMessage(text.String())

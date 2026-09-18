@@ -62,7 +62,7 @@ func (agent *Agent) worker() {
 						goto Done
 					}
 
-					fullResp.Append(resp)				
+					fullResp.Append(*resp)				
 				}
 				t.ResultCh <- handles.TaskResult{Response: fullResp, Err: nil, Interrupted: false}
 			}

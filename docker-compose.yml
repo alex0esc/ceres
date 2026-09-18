@@ -21,7 +21,7 @@ services:
     working_dir: /workspace
 
     volumes:
-      - ./data_sandbox:/workspace
+      - ./:/workspace
 
     restart: unless-stopped
     command: ["/bin/sh", "-c", "chmod -R o+rwX /workspace && exec tail -f /dev/null"]

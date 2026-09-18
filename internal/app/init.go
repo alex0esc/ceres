@@ -6,7 +6,6 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/commands"
-	_ "github.com/alex0esc/ceres/internal/commands"
 	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms"
@@ -43,7 +42,10 @@ func  Start() error {
 	initPlatforms()
 
 	for _, agent := range agents {
-		agent.Start()
+		err := agent.Start()
+		if err != nil {
+			return fmt.Errorf("error starting agent %s: %v", agent.Name(), err)
+		}
 	}
 
 	registerInternalCommands()

@@ -61,7 +61,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	// leave everything as is for better caching efficency
 	resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model:        client.modelName,
-		Instructions: openai.String(client.SystemPrompt),
+		Instructions: openai.String("You are an assistant whose task is to summarize the current chat. Do not ask questions, execute your task in one turn."),
 		Input: responses.ResponseNewParamsInputUnion{
 			OfInputItemList: inputItems,
 		},
@@ -105,7 +105,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	// Update active history and reset TotalTokens to the latest usage baseline
 	client.mutex.Lock()
 	client.chatHistory = newHistory
-	client.TotalTokens = resp.Usage.TotalTokens
 	client.mutex.Unlock()
 	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ summaryStr } })
 	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })

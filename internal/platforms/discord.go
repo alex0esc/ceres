@@ -1,11 +1,14 @@
 package platforms
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/alex0esc/ceres/internal/history"
@@ -18,14 +21,18 @@ import (
 )
 
 type Discord struct {
-	session     *discordgo.Session
-	stopChannel chan struct{}
+	session *discordgo.Session
+
+	stopMu     sync.Mutex
+	stopCtx    context.Context
+	stopCancel context.CancelFunc
 
 	botToken       string
 	agentName      string
 	userID         string
 	messageTimeout time.Duration
 }
+
 
 // NewDiscord constructs a Discord platform, reading all relevant config
 // values once up front. It creates its own session, independent of the
@@ -40,23 +47,22 @@ func NewDiscord() *Discord {
 
 	messageTimeout := config.ReadEntry(cfg, "discord.message_timeout", time.Minute * 60)
 
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+
+	session, err := discordgo.New("Bot " + botToken)
+	if err != nil {
+		slog.Error(fmt.Sprintf("discord_platform: failed to create session (not listening): %v", err))
+	}
+
 	return &Discord{
+		session:        session,
+		stopCtx:        stopCtx,
+		stopCancel:     stopCancel,
 		botToken:       botToken,
 		agentName:      agentName,
 		userID:         userID,
 		messageTimeout: messageTimeout,
 	}
-}
-
-// NewSession creates the discord session used for listening to DMs. It is a
-// no-op if the session has already been created.
-func (d *Discord) NewSession() error {
-	session, err := discordgo.New("Bot " + d.botToken)
-	if err != nil {
-		return fmt.Errorf("discord: failed to create session: %w", err)
-	}
-	d.session = session
-	return nil
 }
 
 func (d *Discord) Name() string {
@@ -69,8 +75,7 @@ func (d *Discord) AgentName() string {
 
 // Listen blocks and listens for incoming DMs until the process is terminated.
 func (d *Discord) Listen(agent handles.AgentHandle) {
-	if err := d.NewSession(); err != nil {
-		log.Printf("discord: failed to initialize session: %v", err)
+	if d.session == nil {
 		return
 	}
 
@@ -84,8 +89,12 @@ func (d *Discord) Listen(agent handles.AgentHandle) {
 		log.Printf("discord: failed to open connection: %v", err)
 		return
 	}
-	d.stopChannel = make(chan struct{})
-	<-d.stopChannel
+
+	d.stopMu.Lock()
+	stopCtx := d.stopCtx
+	d.stopMu.Unlock()
+
+	<-stopCtx.Done()
 	err := d.session.Close()
 	if err != nil {
 		log.Printf("error while closing discord session: %v", err)
@@ -137,7 +146,8 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	if result.Err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error: %v", result.Err))
 	} else {
-		tools.SendChunked(s, m.ChannelID, result.Response.Filter(history.EntryTypeAssistent).String())
+		filtered := result.Response.Filter(history.EntryTypeAssistant)
+		tools.SendChunked(s, m.ChannelID, filtered.String())
 	}
 }
 
@@ -199,16 +209,9 @@ func downloadAttachment(url string) ([]byte, error) {
 	return data, nil
 }
 
-
-// StopListen signals Listen to stop blocking, causing the discord session to
-// close. It is a no-op if Listen isn't currently running.
 func (d *Discord) StopListen() {
-	if d.stopChannel == nil {
-		return
-	}
-	select {
-	case <-d.stopChannel:
-	default:
-		close(d.stopChannel)
-	}
+	d.stopMu.Lock()
+	cancel := d.stopCancel
+	d.stopMu.Unlock()
+	cancel()
 }

@@ -6,7 +6,7 @@ type TokenType int
 
 const (
 	TokenTypeUser = iota
-	TokenTypeAssistent
+	TokenTypeAssistant
 	TokenTypeReasoning
 	TokenTypeToolCall
 	TokenTypeToolResult
@@ -19,9 +19,10 @@ type Token struct {
 	Content []string
 }
 
+// HINT tokens need to be in the right format, be aware when creating new tokens!
 func (token *Token) String() string {
 	switch token.Type {
-	case TokenTypeAssistent, TokenTypeReasoning, TokenTypeUser:
+	case TokenTypeAssistant, TokenTypeReasoning, TokenTypeUser:
 		return token.Content[0]
 	case TokenTypeToolCall:
 		return fmt.Sprintf("Calling tool [%s] with arguments %s...", token.Content[0], token.Content[1])
@@ -35,7 +36,7 @@ func (token *Token) String() string {
 
 
 func (token Token) Copy() Token {
-	clone := token
-	clone.Content = append([]string(nil), token.Content...)
-	return clone
+	copy := token
+	copy.Content = append([]string(nil), token.Content...)
+	return copy
 }
