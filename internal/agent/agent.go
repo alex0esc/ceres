@@ -92,7 +92,21 @@ func (agent *Agent) Stop() {
 		t.ResultCh <- handles.TaskResult{Err: errors.New("task cancelled: agent stopped")}
 	}
 
-	close(ch)
+	if ch != nil {
+		close(ch)
+	}
+}
+
+func (agent *Agent) Name() string        { return agent.name }
+func (agent *Agent) Description() string { return agent.description }
+func (agent *Agent) IsSubagent() bool    { return agent.subagent }
+func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
+
+
+func (agent *Agent) CurrentTask() *handles.Task {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	return agent.currentTask
 }
 
 func (agent *Agent) State() handles.AgentState {
@@ -102,23 +116,20 @@ func (agent *Agent) State() handles.AgentState {
 }
 
 func (agent *Agent) ClearQueue() {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
 	agent.queue = nil
 }
 
-func (agent *Agent) Name() string        { return agent.name }
-func (agent *Agent) Description() string { return agent.description }
-func (agent *Agent) IsSubagent() bool    { return agent.subagent }
-func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
-func (agent *Agent) CurrentTask() *handles.Task        { return agent.currentTask }
-
 
 func (agent *Agent) ListWakeups() []handles.WakeupHandle {
+	agent.mutex.Lock()
 	result := make([]handles.WakeupHandle, 0, len(agent.wakeups))
 
 	for _, wu := range agent.wakeups {
 		result = append(result, wu)
 	}
-
+	agent.mutex.Unlock()
 	return result
 }
 
@@ -130,24 +141,23 @@ func (agent *Agent) ExecuteWakeup(name string) bool {
 		return false
 	}
 	agent.mutex.Unlock()
-	go wu.Execute()
+	wu.Execute()
 	return true
 }
 
 
-func (agent *Agent) RemoveWakeup(name string) bool {
+func (agent *Agent) RemoveWakeup(name string) error {
 	agent.mutex.Lock()
 	wu, ok := agent.wakeups[name]
 	if !ok {
 		agent.mutex.Unlock()
-		return false
+		return fmt.Errorf("wakeup %s does not exist", name)
 	}
 	delete(agent.wakeups, name)
 	agent.mutex.Unlock()
 
 	wu.Stop()
-	wu.Delete()
-	return true
+	return wu.Delete()
 }
 
 func (agent *Agent) AddWakeup(wh handles.WakeupHandle) error {
@@ -156,21 +166,25 @@ func (agent *Agent) AddWakeup(wh handles.WakeupHandle) error {
 	if ok {
 		return fmt.Errorf("wakeup with name %s already exists", wh.Name())
 	}
-	wu := wh.(*wakeup.WakeUp)
-	agent.wakeups[wh.Name()] = wu  
-	agent.mutex.Unlock()
 
+	wu := wh.(*wakeup.WakeUp)
 	if err := wu.Start(agent.cronLib); err != nil {
 		return err
 	}
 	if err := wu.Save(); err != nil {
+		wu.Stop()
 		return err
 	}
+
+	agent.wakeups[wh.Name()] = wu  
+	agent.mutex.Unlock()
 	return nil
 }
 
 func (agent *Agent) GetWakeup(name string) handles.WakeupHandle {
+	agent.mutex.Lock()
 	wu, ok := agent.wakeups[name]
+	agent.mutex.Unlock()
 	if !ok {
 		return nil
 	}

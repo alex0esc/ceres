@@ -44,7 +44,7 @@ type WakeupHandle interface {
 	Name() string
 	Description() string
 	FireAt() *time.Time
-	CroneSpec() string
+	CronSpec() string
 	Protected() bool
 	Prompts() []string
 }
@@ -61,7 +61,7 @@ type AgentHandle interface {
 	ListWakeups() []WakeupHandle
 
 	ExecuteWakeup(name string) bool 
-	RemoveWakeup(name string) bool 
+	RemoveWakeup(name string) error 
 	AddWakeup(wakeup WakeupHandle) error 	
 	GetWakeup(name string) WakeupHandle
 }

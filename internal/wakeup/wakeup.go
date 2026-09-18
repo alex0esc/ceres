@@ -54,7 +54,7 @@ func NewWakeUp(
 func (w *WakeUp) Name() string        { return w.name }
 func (w *WakeUp) Description() string { return w.description }
 func (w *WakeUp) FireAt() *time.Time  { return w.fireAt }
-func (w *WakeUp) CroneSpec() string   { return w.cronSpec }
+func (w *WakeUp) CronSpec() string   { return w.cronSpec }
 func (w *WakeUp) Protected() bool { return w.protected }
 func (w *WakeUp) Prompts() []string { return w.prompts }
 
@@ -67,23 +67,27 @@ func (w *WakeUp) Running() bool {
 	return w.started
 }
 
+// executes the wakeup asyconously
 func (w *WakeUp) Execute() {
-	prompts := make([]handles.Prompt, 0, len(w.prompts))
-	for _, p := range w.prompts {
-		prompts = append(prompts, handles.Prompt{Text: p})
-	}
-	task := handles.TaskClearAskMultiple(prompts, w.timeout)
+	go func(){
+		prompts := make([]handles.Prompt, 0, len(w.prompts))
+		for _, p := range w.prompts {
+			prompts = append(prompts, handles.Prompt{Text: p})
+		}
+		task := handles.TaskClearAskMultiple(prompts, w.timeout)
 
-	res := <-w.agent.SubmitTask(task)
-	if res.Err != nil {
-		slog.Error(fmt.Sprintf("error while running wakeup %s: %v", w.name, res.Err))
-	}
+		res := <-w.agent.SubmitTask(task)
+		if res.Err != nil {
+			slog.Error(fmt.Sprintf("error while running wakeup %s: %v", w.name, res.Err))
+		}
+	}()
 }
 
 // Start schedules the wakeup. Recurring wakeups register against the
 // shared *cron.Cron. One-shot wakeups schedule a timer and remove
 // themselves from disk once they've fired. Keeps a handle to whatever it
 // registered so Stop can cancel it later.
+// fireAt wakeups that are overdue fire instantly at startup (to catch up)
 func (w *WakeUp) Start(c *cron.Cron) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -106,8 +110,8 @@ func (w *WakeUp) Start(c *cron.Cron) error {
 	delay := max(time.Until(*w.fireAt), 0)
 	w.timer = time.AfterFunc(delay, func() {
 		w.Execute()
-		if !w.agent.RemoveWakeup(w.name) {
-			slog.Error(fmt.Sprintf("could not remove wakeup %s after it finished", w.name))
+		if err := w.agent.RemoveWakeup(w.name); err != nil {
+			slog.Error(fmt.Sprintf("could not remove wakeup %s after it finished: %v", w.name, err))
 		}
 	})
 	w.started = true

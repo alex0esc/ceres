@@ -144,7 +144,7 @@ func ensureOneAgentFile(dir string) error {
 		ReasoningEffort:      string(responses.ReasoningEffortMedium),
 		SystemPrompt:         "You are <name> a helpful AI assistant.",
 		Tools:                tool.Names(),
-		Endpoint:             "ollama",
+		Endpoint:             "llama",
 		Quantity:             1,
 		Subagent:             false,
 		MaxToolIterations:    30,

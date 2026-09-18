@@ -39,7 +39,7 @@ func ClearRegistry() {
 func Get(name string) Platform {
 	plat, exists := registry[name]
 	if !exists {
-		log.Fatalf("unknown palform %s", name)
+		log.Fatalf("unknown platform %s", name)
 	} 
 	return plat
 }

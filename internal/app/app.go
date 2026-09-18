@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/alex0esc/ceres/internal/agent"
@@ -21,7 +20,7 @@ var cfg *config.Config
 func GetAgent(name string) *agent.Agent {
 	agnt, ok := agents[name]
 	if !ok {	
-		panic(fmt.Sprintf("unknown agent %s", name))
+		log.Fatalf("unknown agent %s", name)
 	}
 	return agnt
 }

@@ -7,11 +7,10 @@ import (
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/pkg/config"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // item type in the selectalbe list
@@ -69,8 +68,8 @@ func newList(agents []*agent.Agent) list.Model {
 
 	
 	
-l.Styles.Title = l.Styles.Title.
-	Background(lipgloss.Color("")). // Hintergrund entfernen
+	l.Styles.Title = l.Styles.Title.
+	Background(lipgloss.NoColor{}). //remove background
 	Foreground(ThemeColorBorder).
 	Bold(true).
 	Padding(0, 11)
@@ -97,7 +96,7 @@ func initialTui() (*Tui, error) {
 		textarea: newTextArea(),
 		list:      newList(app.GetAgentList()),
 		focus:     focusInput,
-		inputChan: make(chan history.Token, 128),
+		inputChan: make(chan history.Token, 1024),
 		selectedAgent: nil,
 		messageTimeout: timeout,
 		showReasoning: config.ReadEntry(app.GetAppConfig(), "tui.show_reasoning", true),
@@ -107,6 +106,6 @@ func initialTui() (*Tui, error) {
 func (tui *Tui) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmds = append(cmds, tui.waitForToken())
-	cmds = append(cmds, textinput.Blink)
+	cmds = append(cmds, textarea.Blink)
 	return tea.Batch(cmds...)
 }

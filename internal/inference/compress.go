@@ -61,7 +61,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	// 2. Execute synchronous (non-streaming) API request WITHOUT tools
 	resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model:        client.modelName,
-		Instructions: openai.String("You are an assistent whose task is to summerize the current chat. Do not ask questions, execute your task in one turn."),
+		Instructions: openai.String("You are an assistant whose task is to summarize the current chat. Do not ask questions, execute your task in one turn."),
 		Input: responses.ResponseNewParamsInputUnion{
 			OfInputItemList: inputItems,
 		},
@@ -104,7 +104,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	// Update active history and reset TotalTokens to the latest usage baseline
 	client.mutex.Lock()
 	client.chatHistory = newHistory
-	client.TotalTokens = resp.Usage.TotalTokens
 	client.mutex.Unlock()
 	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ summaryStr } })
 	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })

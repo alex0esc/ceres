@@ -35,7 +35,7 @@ func startApp() {
 	if err != nil {
 		log.Fatalf("could not start app: %v", err)
 	}
-	slog.Info("App started succsessuflly!")
+	slog.Info("App started successuflly!")
 }
 
 
@@ -62,11 +62,10 @@ func main() {
 		switch scanner.Text() {
 		case "tui":
 			log.SetOutput(tuiWriter)
-			tui, err := bubbletea.RunTui()
+			err := bubbletea.RunTui()
 			if err != nil {
 				log.Fatalf("error could not start tui: %v", err)
 			}
-			tui.Wait()
 			log.SetOutput(cliWriter)
 		case "reload":
 			app.Shutdown()

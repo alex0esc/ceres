@@ -85,7 +85,7 @@ func (client *Client) ClearOnEvent() {
 
 
 
-func (client *Client) appendAssistentMessage(promt string) {
+func (client *Client) appendAssistantMessage(promt string) {
 	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
 	msg.OfMessage.Type = "message"
 	client.chatHistory = append(client.chatHistory, msg)

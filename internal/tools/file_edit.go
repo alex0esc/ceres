@@ -1,3 +1,4 @@
+
 package tools
 
 
@@ -135,18 +136,18 @@ func (t FileEditTool) fileWrite(ctx context.Context, path, content string) (stri
 	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 
-	// Ensure the parent directory exists, then write the content via a
-	// heredoc fed to "cat > file". Using a quoted heredoc delimiter
-	// ("EOF_FILE_WRITE") prevents the shell from expanding $variables,
-	// backticks, etc. inside the content. We pick a delimiter unlikely to
-	// collide with file content; if it somehow appears verbatim in the
-	// content this would break, but that's an acceptable, well-understood
-	// limitation of the heredoc approach.
-	const delim = "CERES_FILE_WRITE_EOF"
+	// Ensure the parent directory exists, then write the content via
+	// base64 piped into the file. This avoids the heredoc approach's
+	// trailing-newline ambiguity (a heredoc unconditionally inserts a
+	// newline between the content and the closing delimiter line, which
+	// either duplicates an existing trailing newline or fabricates one
+	// where none existed) as well as any shell-escaping issues with
+	// $variables, backticks, etc. inside the content.
 	quotedPath := shellQuote(path)
+	b64 := base64.StdEncoding.EncodeToString([]byte(content))
 	cmd := fmt.Sprintf(
-		"mkdir -p -- \"$(dirname -- %s)\" && cat > %s <<'%s'\n%s\n%s",
-		quotedPath, quotedPath, delim, content, delim,
+		"mkdir -p -- \"$(dirname -- %s)\" && echo %s | base64 -d > %s",
+		quotedPath, shellQuote(b64), quotedPath,
 	)
 	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, cmd)
 	if err != nil {
@@ -320,10 +321,14 @@ func (t FileEditTool) fileStrReplace(ctx context.Context, path, oldStr, newStr s
 	}
 	newContent := strings.Replace(stdout, oldStr, newStr, 1)
 
-	// Write the new content back using a heredoc with a random-ish
-	// delimiter to avoid clashing with content that itself contains
-	// "EOF"-like markers.
-	writeCmd := fmt.Sprintf("cat > %s <<'CERES_EOF_MARKER'\n%s\nCERES_EOF_MARKER", shellQuote(path), newContent)
+	// Write the new content back via base64 piped into the file. This
+	// avoids the heredoc approach's trailing-newline ambiguity (a heredoc
+	// unconditionally inserts a newline between the content and the
+	// closing delimiter line, which either duplicates an existing
+	// trailing newline or fabricates one where none existed) as well as
+	// any clashes with "EOF"-like markers inside the content.
+	b64 := base64.StdEncoding.EncodeToString([]byte(newContent))
+	writeCmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
 	_, stderr, exitCode, err = runInContainer(execCtx, t.containerName, writeCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to write file to sandbox: %w", err)

@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -213,8 +212,12 @@ func (t WakeupEditTool) handleRemove(handle handles.AgentHandle, name *string) (
 		return "", fmt.Errorf("wakeup_edit: no wakeup named %q", wakeupName)
 	}
 
-	if wu.Protected() || !handle.RemoveWakeup(wakeupName) {
-		return "", fmt.Errorf("wakeup_edit: could not remove wakeup %q (it is probably protected)", wakeupName)
+	if wu.Protected() {
+		return "", fmt.Errorf("wakeup_edit: could not remove wakeup %q because it is protected", wakeupName)
+	}
+
+	if err := handle.RemoveWakeup(wakeupName); err != nil {
+		return "", fmt.Errorf("wakeup_edit: could not remove wakeup %q: %v", wakeupName, err)
 	}
 
 	result := struct {
