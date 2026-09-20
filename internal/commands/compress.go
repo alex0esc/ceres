@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
@@ -22,7 +23,7 @@ func handleCompress(agnt handles.AgentHandle, args []string) string {
 		return "The compress command does not take arguments!"
 	}
 
-	task := handles.TaskCompression(30 * time.Minute)
+	task := task.TaskCompression(30 * time.Minute)
 	result := agnt.(*agent.Agent).SubmitTask(task)
 	go func() {
 		res := <- result		

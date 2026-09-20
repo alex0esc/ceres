@@ -1,8 +1,10 @@
-package handles
+package task
 
 import (
 	"context"
 	"time"
+
+	"github.com/alex0esc/ceres/internal/history"
 )
 
 // type of task that should be done
@@ -14,7 +16,6 @@ const(
 	TaskTypeClearAsk
 	TaskTypeCompress
 )
-
 
 
 type ImageInput struct {
@@ -41,8 +42,8 @@ func TaskAskSimple(prompt string, timeout time.Duration) Task {
 	return Task{Prompts: []Prompt{ { Text: prompt, Images: nil }}, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
 }
 
-func TaskAskSingle(promts Prompt, timeout time.Duration) Task {
-	return Task{Prompts: []Prompt{ promts }, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
+func TaskAskSingle(promt Prompt, timeout time.Duration) Task {
+	return Task{Prompts: []Prompt{ promt }, Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeAsk}
 }
 
 func TaskClearAskMultiple(promts []Prompt, timeout time.Duration) Task {
@@ -55,4 +56,11 @@ func TaskClear(timeout time.Duration) Task {
 
 func TaskCompression(timeout time.Duration) Task {
 	return Task{Timeout: timeout, ParentCtx: context.Background(), Tasktype: TaskTypeCompress}
+}
+
+// result returned by submitTask
+type TaskResult struct {
+	Interrupted bool
+	Response *history.History
+	Err      error
 }

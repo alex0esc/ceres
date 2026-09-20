@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/internal/tools"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -139,8 +140,8 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 	images := d.downloadImageAttachments(m.Attachments)
 
 	
-	task := handles.TaskAskSingle(handles.Prompt{Text: m.Content, Images: images}, d.messageTimeout)
-	resultCh := agent.SubmitTask(task)
+	tsk := task.TaskAskSingle(task.Prompt{Text: m.Content, Images: images}, d.messageTimeout)
+	resultCh := agent.SubmitTask(tsk)
 	result := <-resultCh
 	close(stopTyping)
 	if result.Err != nil {
@@ -154,12 +155,12 @@ func (d *Discord) handleMessage(s *discordgo.Session, m *discordgo.MessageCreate
 // downloadImageAttachments filters a message's attachments down to images,
 // downloads each one, and returns them base64-encoded. Attachments that
 // aren't images or that fail to download are skipped (logged, not fatal).
-func (d *Discord) downloadImageAttachments(attachments []*discordgo.MessageAttachment) []handles.ImageInput {
+func (d *Discord) downloadImageAttachments(attachments []*discordgo.MessageAttachment) []task.ImageInput {
 	if len(attachments) == 0 {
 		return nil
 	}
 
-	images := make([]handles.ImageInput, 0, len(attachments))
+	images := make([]task.ImageInput, 0, len(attachments))
 	for _, att := range attachments {
 		if att == nil || att.URL == "" {
 			continue
@@ -177,7 +178,7 @@ func (d *Discord) downloadImageAttachments(attachments []*discordgo.MessageAttac
 			continue
 		}
 
-		images = append(images, handles.ImageInput{
+		images = append(images, task.ImageInput{
 			Base64Image: base64.StdEncoding.EncodeToString(data),
 			MimeType:    mimeType,
 		})

@@ -5,67 +5,100 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/wakeup"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
+
+const wakeUsage = "Usage: `/wake list` or `/wake run <name>`"
 
 func NewWakeupCommand() command.Command {
 	return command.Command{
 		Name:        "wake",
 		Description: "Manage registered wakeups for the specific agent.",
-		Handler: func(agent handles.AgentHandle, args []string) string {
-			return handleWakeup(agent, args)
-		},
+		Handler:     handleWakeup,
 	}
 }
 
 func handleWakeup(agent handles.AgentHandle, args []string) string {
 	if len(args) == 0 {
-		return "Usage: `/wake list` or `/wake run <name>`"
+		return wakeUsage
 	}
 
-	subcommand := strings.ToLower(args[0])
+	mgr := agent.WakeupManager()
 
-	switch subcommand {
+	switch strings.ToLower(args[0]) {
 	case "list":
-		wakeups := agent.ListWakeups()
+		return wakeList(mgr)
+	case "run":
+		return wakeRun(mgr, args[1:])
+	default:
+		return "Unknown subcommand. " + wakeUsage
+	}
+}
 
-		if len(wakeups) == 0 {
-			return "No wakeups registered."
-		}
+func wakeList(mgr *wakeup.Manager) string {
+	internalWakeups := mgr.ListInternalWakeups()
+	externalWakeups := mgr.ListExternalWakeups()
 
-		var b strings.Builder
-		b.WriteString("## Registered Wakeups\n\n")
+	if len(internalWakeups) == 0 && len(externalWakeups) == 0 {
+		return "No wakeups registered."
+	}
 
-		for _, wakeup := range wakeups {
-			fmt.Fprintf(&b, "#### %s\n", wakeup.Name())
-			fmt.Fprintf(&b, "**Description:** %s\n", wakeup.Description())
+	var b strings.Builder
+	b.WriteString("## Registered Wakeups\n\n")
 
-			if fireAt := wakeup.FireAt(); fireAt != nil {
+	if len(internalWakeups) > 0 {
+		b.WriteString("### Internal Wakeups\n\n")
+		b.WriteString("Wakeups created by the agent. These can be edited or removed by the agent.\n\n")
+
+		for _, wu := range internalWakeups {
+			fmt.Fprintf(&b, "#### %s\n", wu.Name())
+			fmt.Fprintf(&b, "**Description:** %s\n", wu.Description())
+
+			if fireAt := wu.FireAt(); !fireAt.IsZero() {
 				fmt.Fprintf(&b, "**Runs at:** %s\n", fireAt.Format(time.RFC3339))
-			} else if cronSpec := strings.TrimSpace(wakeup.CronSpec()); cronSpec != "" {
+			} else if cronSpec := strings.TrimSpace(wu.CronSpec()); cronSpec != "" {
 				fmt.Fprintf(&b, "**Schedule:** `%s`\n", cronSpec)
 			}
 
-			fmt.Fprintf(&b, "**Protected:** %t\n\n", wakeup.Protected())
+			b.WriteString("\n")
 		}
-
-		return b.String()
-
-	case "run":
-		if len(args) < 2 {
-			return "Please specify a wakeup name. Usage: `/wake run <name>`"
-		}
-
-		name := args[1]
-
-		if !agent.ExecuteWakeup(name) {
-			return fmt.Sprintf("Wakeup with name '%s' does not exist.", name)
-		}
-
-		return fmt.Sprintf("*Queued wakeup '%s' for execution.*", name)
-
-	default:
-		return "Unknown subcommand. Usage: `/wake list` or `/wake run <name>`"
 	}
+
+	if len(externalWakeups) > 0 {
+		b.WriteString("### External Wakeups\n\n")
+		b.WriteString("Wakeups created by the user. These are fixed and cannot be edited or removed by the agent.\n\n")
+
+		for _, wu := range externalWakeups {
+			fmt.Fprintf(&b, "#### %s\n", wu.Name())
+			fmt.Fprintf(&b, "**Description:** %s\n", wu.Description())
+
+			if fireAt := wu.FireAt(); !fireAt.IsZero() {
+				fmt.Fprintf(&b, "**Runs at:** %s\n", fireAt.Format(time.RFC3339))
+			} else if cronSpec := strings.TrimSpace(wu.CronSpec()); cronSpec != "" {
+				fmt.Fprintf(&b, "**Schedule:** `%s`\n", cronSpec)
+			}
+
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
 }
+
+func wakeRun(mgr *wakeup.Manager, args []string) string {
+	if len(args) < 1 {
+		return "Please specify a wakeup name. Usage: `/wake run <name>`"
+	}
+
+	name := args[0]
+
+	if !mgr.Run(name) {
+		return fmt.Sprintf("Wakeup with name '%s' does not exist.", name)
+	}
+
+	return fmt.Sprintf("*Queued wakeup '%s' for execution.*", name)
+}
+
+
