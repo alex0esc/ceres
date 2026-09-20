@@ -174,7 +174,9 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 	defer func() { client.partialAnswer = nil }()
 	for i := 0; i < client.MaxToolIterations; i++ {
 		if client.TotalTokens > client.CompressionThreshold {
-			client.CompressHistory(runCtx)
+			if err := client.CompressHistory(runCtx); err != nil {
+				return nil, err, false
+			}
 		} 
 
 		stream := client.endpoint.client.Responses.NewStreaming(runCtx, responses.ResponseNewParams{
