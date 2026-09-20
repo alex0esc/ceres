@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -97,9 +97,9 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			)
 		}
 
-		handle.ClientHandle().AppendUserPrompt(handles.Prompt{
+		handle.ClientHandle().AppendUserPrompt(task.Prompt{
 			Text: "",
-			Images: []handles.ImageInput{{
+			Images: []task.ImageInput{{
 				MimeType:    mimeType,
 				Base64Image: base64.StdEncoding.EncodeToString(imageData),
 			}},

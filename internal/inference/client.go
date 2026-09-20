@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
@@ -47,7 +48,7 @@ type Client struct {
     // compression
     CompressionThreshold int64
 	NumMessagesToKeep int
-    CompressionPromt string
+    CompressionPrompt string
 }
 
 
@@ -59,7 +60,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		MaxToolIterations: 30,
 		endpoint: endpoint,
 		CompressionThreshold: 200000,
-		CompressionPromt: "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
+		CompressionPrompt: "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
 		NumMessagesToKeep: 8,
 		tools: make(map[string]tool.Tool),
 	}
@@ -148,7 +149,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 // get answer streamed; onEvent is called for every text chunk and every
 // tool-call lifecycle event that occurs while generating the response
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
-func (client *Client) AskStream(ctx context.Context, prompt handles.Prompt, handle handles.AgentHandle) (*history.History, error, bool) {
+func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle handles.AgentHandle) (*history.History, error, bool) {
 	client.AppendUserPrompt(prompt)
 
 	//allow cancable context with thread safety

@@ -1,6 +1,5 @@
 package tools
 
-
 import (
 	"context"
 	"encoding/json"
@@ -14,7 +13,8 @@ import (
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
-// FileReadTool reads a file inside the sandbox container and returns its content with line numbers
+// FileReadTool reads a file inside the sandbox container and returns its
+// content, optionally prefixed with line numbers.
 type FileReadTool struct {
 	containerName string
 	timeout       time.Duration
@@ -28,7 +28,7 @@ func NewFileReadTool() FileReadTool {
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 
-	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second * 120)
+	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second*120)
 
 	var defSize int64 = 1024 * 40
 	maxSize := config.ReadEntry(cfg, "file_read.max_size_b", defSize)
@@ -46,10 +46,12 @@ func (FileReadTool) Name() string {
 
 func (t FileReadTool) Description() string {
 	return fmt.Sprintf(
-		"Reads a file inside the sandbox container and returns its content with each line prefixed by its line number "+
-			"(format: \"<line_number>: <content>\"). Use the line numbers to target specific lines with file-editing tools. "+
+		"Reads a file inside the sandbox container and returns its content. By default, each line is prefixed by "+
+			"its line number (format: \"<line_number>: <content>\"); use the line numbers to target specific lines "+
+			"with file-editing tools. Set 'line_numbers' to false to get the raw content without line numbers. "+
 			"Optionally provide 'start_line' and/or 'end_line' (1-based, inclusive) to only return a slice of the file "+
-			"instead of the full content; Files larger than %d bytes are rejected.",
+			"instead of the full content; line numbers always refer to the position in the full file. "+
+			"Files larger than %d bytes are rejected.",
 		t.maxSize,
 	)
 }
@@ -70,8 +72,12 @@ func (FileReadTool) Parameters() map[string]any {
 				"type":        []string{"integer", "null"},
 				"description": "Optional 1-based line number to stop reading at (inclusive). Defaults to the last line.",
 			},
+			"line_numbers": map[string]any{
+				"type":        []string{"boolean", "null"},
+				"description": "Optional. Whether to prefix each line with its line number. Defaults to true.",
+			},
 		},
-		"required":             []string{"path", "start_line", "end_line"},
+		"required":             []string{"path", "start_line", "end_line", "line_numbers"},
 		"additionalProperties": false,
 	}
 }
@@ -79,9 +85,10 @@ func (FileReadTool) Parameters() map[string]any {
 func (t FileReadTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
-			Path      string `json:"path"`
-			StartLine int    `json:"start_line"`
-			EndLine   int    `json:"end_line"`
+			Path        string `json:"path"`
+			StartLine   int    `json:"start_line"`
+			EndLine     int    `json:"end_line"`
+			LineNumbers *bool  `json:"line_numbers"`
 		}
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("file_read: invalid arguments: %w", err)
@@ -96,6 +103,8 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("file_read: start_line (%d) must not be greater than end_line (%d)", args.StartLine, args.EndLine)
 		}
 
+		// Line numbers are on unless explicitly disabled (null/omitted = true).
+		withLineNumbers := args.LineNumbers == nil || *args.LineNumbers
 
 		// Check the file size before reading it fully, so an oversized or
 		// otherwise unusual file (huge log, device file, etc.) never gets
@@ -132,12 +141,9 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("file_read: cat exited with code %d: %s", exitCode, strings.TrimSpace(stderr))
 		}
 
-		content := numberLines(stdout)
-		if args.StartLine > 0 || args.EndLine > 0 {
-			content, err = sliceNumberedLines(content, args.StartLine, args.EndLine)
-			if err != nil {
-				return "", fmt.Errorf("file_read: %w", err)
-			}
+		content, err := formatLines(stdout, args.StartLine, args.EndLine, withLineNumbers)
+		if err != nil {
+			return "", fmt.Errorf("file_read: %w", err)
 		}
 
 		out := struct {
@@ -155,28 +161,22 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 	}
 }
 
+// formatLines selects the lines start..end (1-based, inclusive; values <= 0
+// mean "from the first line" / "until the last line") from content and
+// returns them joined by "\n". If withNumbers is true, each line is prefixed
+// with its line number in the full file ("<n>: <line>").
+func formatLines(content string, start, end int, withNumbers bool) (string, error) {
+	sliced := start > 0 || end > 0
 
-func numberLines(content string) string {
 	content = strings.TrimSuffix(content, "\n")
 	if content == "" {
-		return ""
-	}
-	lines := strings.Split(content, "\n")
-	var b strings.Builder
-	for i, line := range lines {
-		if i > 0 {
-			b.WriteByte('\n')
+		if sliced {
+			return "", fmt.Errorf("file is empty, no lines to select")
 		}
-		fmt.Fprintf(&b, "%d: %s", i+1, line)
+		return "", nil
 	}
-	return b.String()
-}
 
-func sliceNumberedLines(numbered string, start, end int) (string, error) {
-	if numbered == "" {
-		return "", fmt.Errorf("file is empty, no lines to select")
-	}
-	lines := strings.Split(numbered, "\n")
+	lines := strings.Split(content, "\n")
 	total := len(lines)
 
 	if start <= 0 {
@@ -189,5 +189,16 @@ func sliceNumberedLines(numbered string, start, end int) (string, error) {
 		return "", fmt.Errorf("start_line %d is beyond the file's available lines (1-%d)", start, total)
 	}
 
-	return strings.Join(lines[start-1:end], "\n"), nil
+	var b strings.Builder
+	for i := start - 1; i < end; i++ {
+		if i > start-1 {
+			b.WriteByte('\n')
+		}
+		if withNumbers {
+			fmt.Fprintf(&b, "%d: %s", i+1, lines[i])
+		} else {
+			b.WriteString(lines[i])
+		}
+	}
+	return b.String(), nil
 }

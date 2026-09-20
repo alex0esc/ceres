@@ -10,6 +10,7 @@ import (
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms"
 	_ "github.com/alex0esc/ceres/internal/platforms"
+	"github.com/alex0esc/ceres/internal/wakeup"
 	"github.com/robfig/cron/v3"
 
 	"github.com/alex0esc/ceres/internal/tools"
@@ -67,13 +68,16 @@ func Shutdown() {
 	for _, plat := range config.ReadEntry(cfg, "active_platforms", []string{}) {
 		platform.Get(plat).StopListen()
 	}
-	ctx := cronLib.Stop()
-	<-ctx.Done()
+	if cronLib != nil {
+		ctx := cronLib.Stop()
+		<-ctx.Done()
+	}
 	tools.CloseDockerClient()
 	endpoints = nil
 	agents = nil
 	cronLib = nil
 	cfg = nil
+	wakeup.DbClose()
 	tool.ClearRegistry()
 	platform.ClearRegistry()
 	command.ClearRegistry()
@@ -108,35 +112,54 @@ func loadConfigs() error {
 		return fmt.Errorf("error registering external tool: %v", err)
 	}
 
-
 	zone, err := time.LoadLocation(config.ReadEntry(tool.GetToolConfig(), "timezone", "Local"))
 	if err != nil {
 		return fmt.Errorf("invalid timezone in toolconfig")
 	}
 	cronLib = cron.New(cron.WithLocation(zone))
+
+	//open wakeups db before loading agents
+	wakeups, err := wakeup.LoadWakeupsFromFile()
+	if err != nil {
+		return fmt.Errorf("error loading wakeups from wakeups.toml: %v", err)
+	}
+	wakeup.DbOpen()
 	agents, err = agent.LoadAgentsFromDir(endpoints, cronLib)
 	if err != nil {
 		return fmt.Errorf("error loading agents: %v", err)
 	}	
+
+	for agntName, wakeups := range wakeups {
+	    if agent, ok := agents[agntName]; ok {
+	        agent.WakeupManager().AddAll(wakeups)
+	    } else {
+	        return fmt.Errorf("Wakeup for unknown agent %s", agntName)
+	    }
+	}	
+
 	return nil
 }
 
 
+
 func registerInternalTools() {
 	tool.Register(tools.NewBashTool())
-	tool.Register(tools.NewDiscordTool())
+	tool.Register(tools.NewDiscordMsgTool())
 	tool.Register(tools.NewExecuteCodeTool())
-	tool.Register(tools.NewFileEditTool())
+	tool.Register(tools.NewFileStrReplaceTool())
+	tool.Register(tools.NewFileInsertTool())
 	tool.Register(tools.NewFileReadTool())
 	tool.Register(tools.NewGetTimeTool())
 	tool.Register(tools.NewSearxngTool())
 	tool.Register(tools.NewWebExtractTool())
-	tool.Register(tools.NewMemoryReadTool())
-	tool.Register(tools.NewMemoryEditTool())
-	tool.Register(tools.NewSubagentTool())
+	tool.Register(tools.NewMemorySQLTool())
+	tool.Register(tools.NewSubagentListTool())
+	tool.Register(tools.NewSubagentCallTool())
 	tool.Register(tools.NewViewImageTool())
-	tool.Register(tools.NewWakeupReadTool())
-	tool.Register(tools.NewWakeupEditTool())
+	tool.Register(tools.NewWakeupListTool())
+	tool.Register(tools.NewWakeupAddTool())
+	tool.Register(tools.NewWakeupRemoveTool())
+	tool.Register(tools.NewWakeupInspectTool())
 }
 
 
@@ -173,4 +196,3 @@ func initPlatforms() {
 		go plat.Listen(GetAgent(plat.AgentName()))
 	}
 }
-

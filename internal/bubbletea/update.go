@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/command"
-	"github.com/alex0esc/ceres/pkg/handles"
 )
 
 // necessary update method for the tea programm
@@ -107,8 +107,8 @@ func (tui *Tui) submitMessage() {
 	if agnt != nil {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
 		if !cmd {
-			task := handles.TaskAskSimple(input, tui.messageTimeout)
-			res := agnt.SubmitTask(task)
+			tsk := task.TaskAskSimple(input, tui.messageTimeout)
+			res := agnt.SubmitTask(tsk)
 			go func() {
 				err := (<-res).Err
 				if err != nil {

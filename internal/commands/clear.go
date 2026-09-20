@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
@@ -22,7 +23,7 @@ func handleClear(agnt handles.AgentHandle, args []string) string {
 		return "The clear command does not take arguments!"
 	}
 
-	task := handles.TaskClear(time.Minute)
+	task := task.TaskClear(time.Minute)
 	result := agnt.(*agent.Agent).SubmitTask(task)
 	go func() {
 		res := <- result		

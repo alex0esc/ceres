@@ -4,9 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sort"
 
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/pkg/handles"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -21,6 +22,11 @@ func (client *Client) RegisterTool(t tool.Tool) {
 	tp := responses.ToolParamOfFunction(t.Name(), t.Parameters(), true) // strict mode
 	tp.OfFunction.Description = openai.String(t.Description())
 	client.toolParams = append(client.toolParams, tp)
+
+	// Keep toolParams sorted alphabetically by name
+	sort.Slice(client.toolParams, func(i, j int) bool {
+		return client.toolParams[i].OfFunction.Name < client.toolParams[j].OfFunction.Name
+	})
 }
 
 // resets the chat history of the client
@@ -147,7 +153,7 @@ func (client *Client) appendReasoningText(text string) {
 
 
 // appends a list of images with a single prompt after them in the history
-func (client *Client) AppendUserPrompt(prompt handles.Prompt) {
+func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 	content := responses.ResponseInputMessageContentListParam{}
 
 	dataURLs := make([]string, 0, len(prompt.Images))

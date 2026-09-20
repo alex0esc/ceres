@@ -42,7 +42,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	toCompress := client.chatHistory[:cutoff]
 	toKeep := client.chatHistory[cutoff:]
 
-	prompt := client.CompressionPromt
+	prompt := client.CompressionPrompt
 	if prompt == "" {
 		return fmt.Errorf("There is no compression promt given for the client with model %s", client.modelName)
 	}

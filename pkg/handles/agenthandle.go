@@ -3,7 +3,8 @@ package handles
 import (
 	"time"
 
-	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/task"
+	"github.com/alex0esc/ceres/internal/wakeup"
 )
 
 type AgentState int
@@ -27,16 +28,9 @@ func (s AgentState) String() string {
 	}
 }
 
-// result returned by submitTask
-type TaskResult struct {
-	Interrupted bool
-	Response *history.History
-	Err      error
-}
-
 
 type ClientHandle interface {
-	AppendUserPrompt(prompt Prompt)
+	AppendUserPrompt(prompt task.Prompt)
 }
 
 
@@ -47,6 +41,7 @@ type WakeupHandle interface {
 	CronSpec() string
 	Protected() bool
 	Prompts() []string
+
 }
 
 
@@ -55,13 +50,8 @@ type AgentHandle interface {
 	Name() string
 	Description() string
 	State() AgentState
-	SubmitTask(task Task) <-chan TaskResult
+	SubmitTask(task task.Task) <-chan task.TaskResult
 	ClientHandle() ClientHandle
-	CurrentTask() *Task
-	ListWakeups() []WakeupHandle
-
-	ExecuteWakeup(name string) bool 
-	RemoveWakeup(name string) error 
-	AddWakeup(wakeup WakeupHandle) error 	
-	GetWakeup(name string) WakeupHandle
+	CurrentTask() *task.Task
+	WakeupManager() *wakeup.Manager
 }

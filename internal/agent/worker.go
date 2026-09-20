@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
@@ -40,31 +41,31 @@ func (agent *Agent) worker() {
 			agent.mutex.Unlock()
 
 			switch t.Tasktype {
-			case handles.TaskTypeCompress:
+			case task.TaskTypeCompress:
 				err := agent.Client.CompressHistory(runCtx)
-				t.ResultCh <- handles.TaskResult{Response: nil, Err: err}
-			case handles.TaskTypeClear:
+				t.ResultCh <- task.TaskResult{Response: nil, Err: err}
+			case task.TaskTypeClear:
 				agent.Client.ClearHistory()
-				t.ResultCh <- handles.TaskResult{Response: nil, Err: nil}
-			case handles.TaskTypeAsk, handles.TaskTypeClearAsk:
-				if t.Tasktype == handles.TaskTypeClearAsk {
+				t.ResultCh <- task.TaskResult{Response: nil, Err: nil}
+			case task.TaskTypeAsk, task.TaskTypeClearAsk:
+				if t.Tasktype == task.TaskTypeClearAsk {
 					agent.Client.ClearHistory()
 				}
 				var fullResp *history.History = &history.History{}
 				for _, promt := range t.Prompts {
 					resp, err, interrupted := agent.Client.AskStream(runCtx, promt, agent)
 					if interrupted {
-						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: nil, Interrupted: true }
+						t.ResultCh <- task.TaskResult{Response: fullResp, Err: nil, Interrupted: true }
 						goto Done
 					}
 					if err != nil {
-						t.ResultCh <- handles.TaskResult{Response: fullResp, Err: err, Interrupted: false }
+						t.ResultCh <- task.TaskResult{Response: fullResp, Err: err, Interrupted: false }
 						goto Done
 					}
 
 					fullResp.Append(*resp)				
 				}
-				t.ResultCh <- handles.TaskResult{Response: fullResp, Err: nil, Interrupted: false}
+				t.ResultCh <- task.TaskResult{Response: fullResp, Err: nil, Interrupted: false}
 			}
 			Done:
 			cancel()
@@ -74,27 +75,27 @@ func (agent *Agent) worker() {
 }
 
 // SubmitTask enqueues a new task and returns a channel that will receive its result.
-func (agent *Agent) SubmitTask(task handles.Task) <-chan handles.TaskResult {
-	resultCh := make(chan handles.TaskResult, 1)
+func (agent *Agent) SubmitTask(tsk task.Task) <-chan task.TaskResult {
+	resultCh := make(chan task.TaskResult, 1)
 
-	if inChain(task.ParentCtx, agent.name) {
-		resultCh <- handles.TaskResult{
+	if inChain(tsk.ParentCtx, agent.name) {
+		resultCh <- task.TaskResult{
 			Err: fmt.Errorf("agent cycle detected: agent %q calls itself (directly or indirectly)", agent.name),
 		}
 		return resultCh
 	}
 
-	task.ParentCtx = withAgent(task.ParentCtx, agent.name)
+	tsk.ParentCtx = withAgent(tsk.ParentCtx, agent.name)
 	
-	task.ResultCh = resultCh
+	tsk.ResultCh = resultCh
 
 	agent.mutex.Lock()
 	if agent.state == handles.AgentStateStopped {
 		agent.mutex.Unlock()
-		resultCh <- handles.TaskResult{Err: errors.New("agent is stopped")}
+		resultCh <- task.TaskResult{Err: errors.New("agent is stopped")}
 		return resultCh
 	}
-	agent.queue = append(agent.queue, &task)
+	agent.queue = append(agent.queue, &tsk)
 	agent.mutex.Unlock()
 
 	// wake up the worker; non-blocking, since the worker drains the whole queue once woken
