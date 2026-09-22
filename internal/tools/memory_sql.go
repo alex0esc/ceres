@@ -22,18 +22,16 @@ import (
 
 const memorySQLTimeout = 5 * time.Second
 
-const defaultSchema = `
-CREATE TABLE IF NOT EXISTS facts (
-	key        TEXT PRIMARY KEY COLLATE NOCASE,
-	value      TEXT NOT NULL,
-	updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE TABLE IF NOT EXISTS notes (
-	id         INTEGER PRIMARY KEY,
-	content    TEXT NOT NULL,
-	created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);`
 
+const defaultSchema = `
+CREATE TABLE IF NOT EXISTS table_catalog (
+	table_name  TEXT PRIMARY KEY COLLATE NOCASE,
+	description TEXT NOT NULL,
+	updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+INSERT OR IGNORE INTO table_catalog(table_name, description)
+VALUES ('table_catalog', 'Inhaltsverzeichnis: listet alle Tabellen dieser Datenbank mit einer kurzen Beschreibung ihres Zwecks.');
+`
 
 var (
 	// Matches '...' string literals (with '' as escaped quote), so that keywords
@@ -71,20 +69,26 @@ func (MemorySQLTool) Name() string {
 }
 
 
+
 func (MemorySQLTool) Description() string {
 	return "Your persistent memory: a private SQLite database. " +
 		"IMPORTANT: If you pass multiple statements separated by ';', ALL of them are executed, " +
 		"but the output and 'rows_affected' will ONLY show the result of the VERY LAST statement. " +
-		"There are already some base tables for you created by the user, use them if possible!" +
-		"Discover the schema with: SELECT name, sql FROM sqlite_master WHERE type='table'; " +
+		"There is exactly one base table, 'table_catalog' (table_name, description, updated_at), which acts as a table of contents " +
+		"for this database: it lists every other table you create, along with a short description of what it's for. " +
+		"updated_at is stored as an ISO8601 UTC string (e.g. '2026-09-22T14:30:00Z'), not a unix timestamp — " +
+		"use strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as the default for any timestamp column you add to your own tables too. " +
+		"Discover the schema with: SELECT * FROM table_catalog; or SELECT name, sql FROM sqlite_master WHERE type='table'; " +
 		"or SELECT * FROM pragma_table_info('table_name');. " +
-		"Upsert a fact with: INSERT INTO facts(key, value) VALUES ('user.city', 'Berlin') " +
-		"ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch(). " +
-		"Keys are CASE-SENSITIVE — always use lowercase 'area.property' format and check existing keys first. " +
-		"ALWAYS include a WHERE clause on UPDATE and DELETE to prevent unintended mass changes. " +
+		"IMPORTANT: Whenever you CREATE a new table, you MUST also INSERT a row into table_catalog describing its purpose. " +
+		"Whenever you DROP a table, you MUST also DELETE its corresponding row from table_catalog. " +
+		"This is NOT enforced by the tool — keeping table_catalog accurate and up to date is entirely your responsibility. " +
+		"Upsert a catalog entry with: INSERT INTO table_catalog(table_name, description) VALUES ('my_table', 'what it stores and why') " +
+		"ON CONFLICT(table_name) DO UPDATE SET description = excluded.description, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'). " +
 		"Escape single quotes in strings by doubling them (it''s). Never use double quotes for string literals. " +
 		"ATTACH, PRAGMA, VACUUM and LOAD_EXTENSION statements are forbidden."
 }
+
 
 func (MemorySQLTool) Parameters() map[string]any {
 	return map[string]any{
