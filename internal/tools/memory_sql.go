@@ -60,22 +60,16 @@ var (
 type MemorySQLTool struct {
 	maxRows    int
 	maxColumns int
-	baseSchema string
 }
 
-// NewMemorySQLTool constructs a MemorySQLTool, reading all relevant config
+// NewMemorySQLTool constructs a MemorySQLTool, reading the relevant config
 // values once up front.
 func NewMemorySQLTool() MemorySQLTool {
 	cfg := tool.GetToolConfig()
 
-	maxRows := config.ReadEntry(cfg, "memory_sql.max_rows", 100)
-	maxColumns := config.ReadEntry(cfg, "memory_sql.max_columns", 50)
-	baseSchema := config.ReadEntry(cfg, "memory_sql.base_schema", defaultSchema)
-
 	return MemorySQLTool{
-		maxRows:    maxRows,
-		maxColumns: maxColumns,
-		baseSchema: baseSchema,
+		maxRows:    config.ReadEntry(cfg, "memory_sql.max_rows", 100),
+		maxColumns: config.ReadEntry(cfg, "memory_sql.max_columns", 50),
 	}
 }
 
@@ -148,7 +142,7 @@ func (m MemorySQLTool) Handler() tool.ToolHandler {
 		ctx, cancel := context.WithTimeout(ctx, memorySQLTimeout)
 		defer cancel()
 
-		db, err := openMemoryDB(ctx, m.baseSchema, dbPath)
+		db, err := openMemoryDB(ctx, dbPath)
 		if err != nil {
 			return "", fmt.Errorf("memory_sql: %w", err)
 		}
@@ -172,7 +166,7 @@ func (d *memoryDB) Close() {
 	d.rw.Close()
 }
 
-func openMemoryDB(ctx context.Context, baseSchema, path string) (*memoryDB, error) {
+func openMemoryDB(ctx context.Context, path string) (*memoryDB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("could not create memory directory: %w", err)
 	}
@@ -184,7 +178,7 @@ func openMemoryDB(ctx context.Context, baseSchema, path string) (*memoryDB, erro
 	rw.SetMaxOpenConns(1)
 
 	// Creates the file on first use and makes sure the base table exists.
-	if _, err := rw.ExecContext(ctx, baseSchema); err != nil {
+	if _, err := rw.ExecContext(ctx, defaultSchema); err != nil {
 		rw.Close()
 		return nil, fmt.Errorf("could not initialise database: %w", err)
 	}
