@@ -19,9 +19,10 @@ import (
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
-
 const memorySQLTimeout = 5 * time.Second
 
+// catalogTable is the only predefined table. It cannot be dropped or altered.
+const catalogTable = "table_catalog"
 
 const defaultSchema = `
 CREATE TABLE IF NOT EXISTS table_catalog (
@@ -33,13 +34,27 @@ INSERT OR IGNORE INTO table_catalog(table_name, description)
 VALUES ('table_catalog', 'Inhaltsverzeichnis: listet alle Tabellen dieser Datenbank mit einer kurzen Beschreibung ihres Zwecks.');
 `
 
+const (
+	// Optional quote characters around identifiers: " ` [ ]
+	sqlQuoteOpen  = `["` + "`" + `\[]?`
+	sqlQuoteClose = `(?:["` + "`" + `\]]|\b)`
+)
+
 var (
 	// Matches '...' string literals (with '' as escaped quote), so that keywords
-	// inside stored text (e.g. "please attach the file") do not trigger the blocklist.
+	// inside stored text (e.g. "please attach the file") do not trigger the checks.
 	memorySQLStringLiteral = regexp.MustCompile(`'(?:[^']|'')*'`)
+
 	// Statements that could reach outside of the agent's own database file.
 	// \b does not match inside pragma_table_info(), so that function stays usable in SELECTs.
 	memorySQLForbidden = regexp.MustCompile(`(?i)\b(attach|detach|pragma|load_extension|vacuum)\b`)
+
+	// DROP TABLE / ALTER TABLE (incl. RENAME) on the protected catalog table.
+	// Handles IF EXISTS, an optional "main." prefix and identifier quoting.
+	memorySQLProtectCatalog = regexp.MustCompile(
+		`(?i)\b(?:drop|alter)\s+table\s+(?:if\s+exists\s+)?` +
+			`(?:` + sqlQuoteOpen + `main` + sqlQuoteClose + `\s*\.\s*)?` +
+			sqlQuoteOpen + catalogTable + sqlQuoteClose)
 )
 
 type MemorySQLTool struct {
@@ -68,27 +83,26 @@ func (MemorySQLTool) Name() string {
 	return "memory_sql"
 }
 
-
-
 func (MemorySQLTool) Description() string {
-	return "Your persistent memory: a private SQLite database. " +
+	return "Your persistent memory: a private SQLite database that belongs only to you. " +
 		"IMPORTANT: If you pass multiple statements separated by ';', ALL of them are executed, " +
 		"but the output and 'rows_affected' will ONLY show the result of the VERY LAST statement. " +
-		"There is exactly one base table, 'table_catalog' (table_name, description, updated_at), which acts as a table of contents " +
-		"for this database: it lists every other table you create, along with a short description of what it's for. " +
+		"The only predefined table is 'table_catalog' (table_name, description, updated_at), which acts as a table of contents: " +
+		"it lists every table you create, along with a short description of what it's for. " +
+		"table_catalog cannot be dropped, renamed or altered. " +
+		"All other tables are up to you: create, alter and drop them freely and choose their names, columns and structure as you see fit. " +
 		"updated_at is stored as an ISO8601 UTC string (e.g. '2026-09-22T14:30:00Z'), not a unix timestamp — " +
 		"use strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as the default for any timestamp column you add to your own tables too. " +
 		"Discover the schema with: SELECT * FROM table_catalog; or SELECT name, sql FROM sqlite_master WHERE type='table'; " +
 		"or SELECT * FROM pragma_table_info('table_name');. " +
 		"IMPORTANT: Whenever you CREATE a new table, you MUST also INSERT a row into table_catalog describing its purpose. " +
-		"Whenever you DROP a table, you MUST also DELETE its corresponding row from table_catalog. " +
+		"Whenever you DROP one of your tables, you MUST also DELETE its corresponding row from table_catalog. " +
 		"This is NOT enforced by the tool — keeping table_catalog accurate and up to date is entirely your responsibility. " +
 		"Upsert a catalog entry with: INSERT INTO table_catalog(table_name, description) VALUES ('my_table', 'what it stores and why') " +
 		"ON CONFLICT(table_name) DO UPDATE SET description = excluded.description, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'). " +
 		"Escape single quotes in strings by doubling them (it''s). Never use double quotes for string literals. " +
-		"ATTACH, PRAGMA, VACUUM and LOAD_EXTENSION statements are forbidden."
+		"ATTACH, DETACH, PRAGMA, VACUUM and LOAD_EXTENSION statements are forbidden."
 }
-
 
 func (MemorySQLTool) Parameters() map[string]any {
 	return map[string]any{
@@ -96,7 +110,7 @@ func (MemorySQLTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"sql": map[string]any{
 				"type":        "string",
-				"description": "The single SQL command to execute (e.g., SELECT, INSERT, CREATE TABLE).",
+				"description": "The SQL command to execute (e.g., SELECT, INSERT, CREATE TABLE).",
 			},
 		},
 		"required":             []string{"sql"},
@@ -169,7 +183,7 @@ func openMemoryDB(ctx context.Context, baseSchema, path string) (*memoryDB, erro
 	}
 	rw.SetMaxOpenConns(1)
 
-	// Creates the file on first use and makes sure the base tables exist.
+	// Creates the file on first use and makes sure the base table exists.
 	if _, err := rw.ExecContext(ctx, baseSchema); err != nil {
 		rw.Close()
 		return nil, fmt.Errorf("could not initialise database: %w", err)
@@ -183,14 +197,21 @@ func openMemoryDB(ctx context.Context, baseSchema, path string) (*memoryDB, erro
 	return &memoryDB{rw: rw, ro: ro}, nil
 }
 
-// memorySQLCheck rejects empty statements and statements that could leave the agent's own database.
+// memorySQLCheck rejects empty statements, statements that could leave the agent's
+// own database, and statements that would drop or alter the protected table_catalog.
 func memorySQLCheck(stmt string) error {
 	if strings.TrimSpace(stmt) == "" {
 		return fmt.Errorf("memory_sql: 'sql' is required")
 	}
+
+	// Remove string literals so that stored text cannot trigger the checks.
 	stripped := memorySQLStringLiteral.ReplaceAllString(stmt, "''")
+
 	if kw := memorySQLForbidden.FindString(stripped); kw != "" {
 		return fmt.Errorf("memory_sql: keyword %q is not allowed", strings.ToUpper(kw))
+	}
+	if memorySQLProtectCatalog.MatchString(stripped) {
+		return fmt.Errorf("memory_sql: table_catalog is a protected table and cannot be dropped, renamed or altered")
 	}
 	return nil
 }
@@ -286,7 +307,7 @@ func (m MemorySQLTool) memorySQLExecute(ctx context.Context, db *memoryDB, query
 		return memorySQLMarshal(res)
 	}
 
-	// For non-SELECT queries (INSERT, UPDATE, CREATE, etc.), use the read/write connection
+	// For non-SELECT queries (INSERT, UPDATE, CREATE, etc.), use the read/write connection.
 	res, err := db.rw.ExecContext(ctx, query)
 	if err != nil {
 		return "", fmt.Errorf("memory_sql: exec failed: %w", err)

@@ -97,7 +97,7 @@ func ensureWakeupConfigFile(path string) error {
 				Description: "This is an example wakeup. Edit this file to add your own wakeups. This example is already expired and will be ignored.",
 				FireAt:      time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC), // Expired one-shot - will be ignored
 				CronSpec:    "",
-				TaskType:    "ask",
+				TaskType:    "clear_ask",
 				Prompts:     []string{"This is an example prompt. Replace it with your own task."},
 				Timeout:     "30s",
 			},
@@ -176,7 +176,7 @@ func parseUserWakeupEntry(entry userWakeupEntry, now time.Time) (*WakeUp, error)
 
 	var tType task.TaskType
 	switch strings.ToLower(strings.TrimSpace(entry.TaskType)) {
-	case "ask", "":
+	case "ask":
 		tType = task.TaskTypeAsk
 	case "clear":
 		tType = task.TaskTypeClear
