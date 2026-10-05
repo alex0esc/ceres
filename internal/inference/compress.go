@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
-// CompressHistory compresses older messages in chatHistory when total token count exceeds limits.
+// CompressHistory compresses older messages in the history when total token count exceeds limits.
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
 func (client *Client) CompressHistory(ctx context.Context) error {
 	client.mutex.Lock()
@@ -31,7 +31,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 
 	client.mutex.Unlock()
 
-	totalMessages := len(client.chatHistory.Entries)
+	totalMessages := len(client.History.Entries)
 
 	// Return early if there are not enough messages to trigger compression
 	if totalMessages <= client.NumMessagesToKeep {
@@ -39,8 +39,8 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	}
 
 	cutoff := totalMessages - client.NumMessagesToKeep
-	toCompress := client.chatHistory.Entries[:cutoff]
-	toKeep := client.chatHistory.Entries[cutoff:]
+	toCompress := client.History.Entries[:cutoff]
+	toKeep := client.History.Entries[cutoff:]
 
 	prompt := client.CompressionPrompt
 	if prompt == "" {
@@ -98,7 +98,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 
 	// Update active history and reset TotalTokens to the latest usage baseline
 	client.mutex.Lock()
-	client.chatHistory = history.History{Entries: newHistory}
+	client.History = history.History{Entries: newHistory}
 	client.mutex.Unlock()
 	client.triggerOnEvent(history.Token{ Type: history.EntryTypeUser, Text: summaryStr })
 	client.triggerOnEvent(history.Token{ Type: history.EntryEndOfSequence })

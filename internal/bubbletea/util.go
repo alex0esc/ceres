@@ -85,8 +85,7 @@ func (tui *Tui) loadAgentHistory() {
 	}}
 	Done:
 
-	histroy := tui.selectedAgent.Client.GetHistory()
-	for entry := range histroy.All() {
+	for entry := range tui.selectedAgent.Client.History.All() {
 		switch entry.Type {
 		case history.EntryTypeAssistant:			
 			tui.appendAgentMessage(entry.String())

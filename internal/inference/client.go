@@ -27,7 +27,7 @@ type Client struct {
 	SystemPrompt    string
 
 	// history
-	chatHistory     history.History
+	History         history.History
 	partialAnswer   []history.Token
 	onEvent         func(history.Token)
 	
@@ -68,7 +68,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 
 
 // executes all items found in a response output in their original order:
-// message-text items are appended to chatHistory as assistant turns,
+// message-text items are appended to the history as assistant turns,
 // function-call items are executed and their call+result appended.
 // Returns the concatenated assistant text found in this output, whether
 // any tool calls were found, and an error if one occurred.
@@ -110,7 +110,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				Arguments: v.Arguments,
 				CallID:    v.CallID,
 			}}
-			client.chatHistory.Push(call)
+			client.History.Push(call)
 			fullAnswer.Push(call.Copy())
 			client.triggerOnEvent(call.Copy())
 			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
@@ -135,7 +135,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				CallID: v.CallID,
 				Output: result,
 			}}
-			client.chatHistory.Push(resultEntry)
+			client.History.Push(resultEntry)
 			fullAnswer.Push(resultEntry.Copy())
 			client.triggerOnEvent(resultEntry.Copy())
 			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})

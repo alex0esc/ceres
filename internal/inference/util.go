@@ -31,7 +31,7 @@ func (client *Client) RegisterTool(t tool.Tool) {
 
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
-	client.chatHistory = history.History{}
+	client.History = history.History{}
 	client.TotalTokens = 0
 }
 
@@ -92,7 +92,7 @@ func (client *Client) ClearOnEvent() {
 
 
 func (client *Client) appendAssistantMessage(promt string) {
-	client.chatHistory.Push(history.Entry{Type: history.EntryTypeAssistant, Text: promt})
+	client.History.Push(history.Entry{Type: history.EntryTypeAssistant, Text: promt})
 }
 
 
@@ -109,7 +109,7 @@ func (client *Client) appendReasoningItem(item responses.ResponseReasoningItem) 
 	for _, ci := range item.Content {
 		r.Content = append(r.Content, ci.Text)
 	}
-	client.chatHistory.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
+	client.History.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
 }
 
 
@@ -133,7 +133,7 @@ func (client *Client) appendReasoningText(text string) {
 	} else {
 		r.Content = []string{text}
 	}
-	client.chatHistory.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
+	client.History.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
 }
 
 
@@ -155,7 +155,7 @@ func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 		hasImage = true
 	}
 
-	client.chatHistory.Push(entry)
+	client.History.Push(entry)
 
 	if hasImage {
 		client.triggerOnEvent(history.Token{Type: history.EntryTypeImage, Images: append([]history.Image(nil), entry.Images...)})
@@ -171,7 +171,7 @@ func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 // buildRequestInput reconstructs the OpenAI Responses input items from the
 // stored, lossless history. Called right before every request.
 func (client *Client) buildRequestInput() []responses.ResponseInputItemUnionParam {
-	return entriesToItems(client.chatHistory.Entries)
+	return entriesToItems(client.History.Entries)
 }
 
 // entriesToItems converts history entries back into OpenAI input items,
