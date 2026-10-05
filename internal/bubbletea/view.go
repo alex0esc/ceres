@@ -82,7 +82,7 @@ func (tui *Tui) getInfoTextString() string {
 	text := fmt.Sprintf(
 		"Agent: %s\tTokens: %v/%v\tStatus: %s",
 		tui.selectedAgent.Name(),
-		client.TotalTokens,
+		client.History.TotalTokens,
 		client.CompressionThreshold,
 		tui.selectedAgent.State(),
 	)

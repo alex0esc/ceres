@@ -42,9 +42,6 @@ type Client struct {
     cancelActiveRun context.CancelFunc
 
 
-    // usage
-    TotalTokens int64
-
     // compression
     CompressionThreshold int64
 	NumMessagesToKeep int
@@ -174,7 +171,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 	var fullAnswer history.History
 	defer func() { client.partialAnswer = nil }()
 	for i := 0; i < client.MaxToolIterations; i++ {
-		if client.TotalTokens > client.CompressionThreshold {
+		if client.History.TotalTokens > client.CompressionThreshold {
 			if err := client.CompressHistory(runCtx); err != nil {
 				return nil, err, false
 			}
@@ -230,7 +227,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls
 				finalOutput = e.Response.Output
-				client.TotalTokens = e.Response.Usage.TotalTokens
+				client.History.TotalTokens = e.Response.Usage.TotalTokens
 			}
 		}
 

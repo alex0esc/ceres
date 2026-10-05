@@ -32,7 +32,6 @@ func (client *Client) RegisterTool(t tool.Tool) {
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
 	client.History = history.History{}
-	client.TotalTokens = 0
 }
 
 

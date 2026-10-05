@@ -7,7 +7,8 @@ import (
 )
 
 type History struct {
-	Entries []Entry
+	Entries     []Entry `json:"entries"`
+	TotalTokens int64   `json:"total_tokens"`
 }
 
 func (history *History) Push(entry Entry) {
@@ -68,7 +69,7 @@ func (history *History) LastEntry() (bool, Entry) {
 // Copy returns a deep copy of the history, so it can be read or stored safely
 // while the original keeps changing.
 func (history *History) Copy() History {
-	c := History{}
+	c := History{TotalTokens: history.TotalTokens}
 	if history.Entries != nil {
 		c.Entries = make([]Entry, 0, len(history.Entries))
 		for _, entry := range history.Entries {

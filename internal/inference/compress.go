@@ -96,7 +96,8 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summaryStr})
 	newHistory = append(newHistory, toKeep...)
 
-	// Update active history and reset TotalTokens to the latest usage baseline
+	// Replace the history; TotalTokens (now part of the history) resets to 0 and
+	// is set again by the next response's usage.
 	client.mutex.Lock()
 	client.History = history.History{Entries: newHistory}
 	client.mutex.Unlock()
