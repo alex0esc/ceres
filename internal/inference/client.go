@@ -169,6 +169,9 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 	// keyed by output index, so we don't emit StreamEventToolCallStarted twice
 	// for the same item if the SDK emits multiple related events for it
 	var fullAnswer history.History
+	// context size before this answer; the answer's token count is how much the
+	// total grew during it (generated output plus any tool results added meanwhile)
+	startTokens := client.History.TotalTokens
 	defer func() { client.partialAnswer = nil }()
 	for i := 0; i < client.MaxToolIterations; i++ {
 		if client.History.TotalTokens > client.CompressionThreshold {
@@ -250,6 +253,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			if normal.Len() > 0 {
 				client.appendAssistantMessage(normal.String())
 			}
+			fullAnswer.TotalTokens = max(0, client.History.TotalTokens-startTokens)
 			return &fullAnswer, nil, true
 		}
 
@@ -261,6 +265,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 
 		client.partialAnswer = nil
 		if !client.handleToolCalls(runCtx, finalOutput, handle, &fullAnswer) {
+			fullAnswer.TotalTokens = max(0, client.History.TotalTokens-startTokens)
 			return &fullAnswer, nil, false
 		}
 	}
