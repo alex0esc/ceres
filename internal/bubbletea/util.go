@@ -91,7 +91,14 @@ func (tui *Tui) loadAgentHistory() {
 		case history.EntryTypeAssistant:			
 			tui.appendAgentMessage(entry.String())
 		case history.EntryTypeUser:
-			tui.appendUserMessage(entry.String())
+			// images live inside the user entry; render them like the stream does
+			if len(entry.Images) > 0 {
+				img := history.Entry{Type: history.EntryTypeImage, Images: entry.Images}
+				tui.appendUserMessage(img.String())
+			}
+			if entry.Text != "" {
+				tui.appendUserMessage(entry.Text)
+			}
 		case history.EntryTypeToolCall:
 			tui.appendSystemMessage(entry.String())
 		case history.EntryTypeReasoning:
@@ -126,7 +133,7 @@ func (tui *Tui) getContentString() string {
 		switch tui.tokens[0].Type {
 		case history.EntryTypeToolCall:
 			rendered = tui.renderSystem(tokenText.String())
-		case history.TokenTypeReasoning:
+		case history.EntryTypeReasoning:
 			rendered = tui.renderReasoning(tokenText.String())
 		default:
 			rendered, err = tui.rendererAgent.Render(tokenText.String())
@@ -150,13 +157,13 @@ func (tui *Tui) mergeTokens() {
 		text.WriteString(token.String())
 	}
 	switch tui.tokens[0].Type {
-	case history.TokenTypeAssistant, history.TokenEndOfSequence: 
+	case history.EntryTypeAssistant, history.EntryEndOfSequence:
 		tui.appendAgentMessage(text.String())
-	case history.TokenTypeUser: 
+	case history.EntryTypeUser:
 		tui.appendUserMessage(text.String())
-	case history.TokenTypeToolCall:
+	case history.EntryTypeToolCall:
 		tui.appendSystemMessage(text.String())
-	case history.TokenTypeReasoning:
+	case history.EntryTypeReasoning:
 		tui.appendReasoningMessage(text.String())
 	case history.EntryTypeImage:
 		tui.appendUserMessage(text.String())

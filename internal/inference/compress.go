@@ -31,7 +31,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 
 	client.mutex.Unlock()
 
-	totalMessages := len(client.chatHistory)
+	totalMessages := len(client.chatHistory.Entries)
 
 	// Return early if there are not enough messages to trigger compression
 	if totalMessages <= client.NumMessagesToKeep {
@@ -39,8 +39,8 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	}
 
 	cutoff := totalMessages - client.NumMessagesToKeep
-	toCompress := client.chatHistory[:cutoff]
-	toKeep := client.chatHistory[cutoff:]
+	toCompress := client.chatHistory.Entries[:cutoff]
+	toKeep := client.chatHistory.Entries[cutoff:]
 
 	prompt := client.CompressionPrompt
 	if prompt == "" {
@@ -48,15 +48,13 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	}
 
 	// 1. Prepare payload for the non-streaming compression call
-	inputItems := make([]responses.ResponseInputItemUnionParam, 0, len(toCompress)+1)
-	inputItems = append(inputItems, toCompress...)
-
+	inputItems := entriesToItems(toCompress)
 	prompt = "[System] " + prompt
 	promptMsg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
 	promptMsg.OfMessage.Type = "message"
 	inputItems = append(inputItems, promptMsg)
-	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ prompt } })
-	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })
+	client.triggerOnEvent(history.Token{ Type: history.EntryTypeUser, Text: prompt })
+	client.triggerOnEvent(history.Token{ Type: history.EntryEndOfSequence })
 
 	// 2. Execute synchronous (non-streaming) API request WITHOUT tools
 	resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
@@ -92,20 +90,17 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	
 
 	// 4. Rebuild chat history: [Summary turn] + [unmodified recent messages]
-	newHistory := make([]responses.ResponseInputItemUnionParam, 0, 1+len(toKeep))
+	newHistory := make([]history.Entry, 0, 1+len(toKeep))
 
 	summaryStr := "[Summary of previous conversation]\n\n" + summaryBuilder.String() + "\n\n[End of summary]"
-	summaryItem := responses.ResponseInputItemParamOfMessage(summaryStr, responses.EasyInputMessageRoleUser)
-	summaryItem.OfMessage.Type = "message"
-
-	newHistory = append(newHistory, summaryItem)
+	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summaryStr})
 	newHistory = append(newHistory, toKeep...)
 
 	// Update active history and reset TotalTokens to the latest usage baseline
 	client.mutex.Lock()
-	client.chatHistory = newHistory
+	client.chatHistory = history.History{Entries: newHistory}
 	client.mutex.Unlock()
-	client.triggerOnEvent(history.Token{ Type: history.TokenTypeUser, Content: []string{ summaryStr } })
-	client.triggerOnEvent(history.Token{ Type: history.TokenEndOfSequence })
+	client.triggerOnEvent(history.Token{ Type: history.EntryTypeUser, Text: summaryStr })
+	client.triggerOnEvent(history.Token{ Type: history.EntryEndOfSequence })
 	return nil
 }

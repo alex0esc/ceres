@@ -31,7 +31,7 @@ func (client *Client) RegisterTool(t tool.Tool) {
 
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
-	client.chatHistory = nil
+	client.chatHistory = history.History{}
 	client.TotalTokens = 0
 }
 
@@ -92,29 +92,24 @@ func (client *Client) ClearOnEvent() {
 
 
 func (client *Client) appendAssistantMessage(promt string) {
-	msg := responses.ResponseInputItemParamOfMessage(promt, responses.EasyInputMessageRoleAssistant)
-	msg.OfMessage.Type = "message"
-	client.chatHistory = append(client.chatHistory, msg)
+	client.chatHistory.Push(history.Entry{Type: history.EntryTypeAssistant, Text: promt})
 }
 
 
-// appendReasoningMessage pushes a native reasoning item back into chatHistory
-// (with encrypted_content when present) so reasoning-mode backends can
-// validate/replay it, instead of flattening the reasoning text into a plain
+// appendReasoningItem stores a reasoning item losslessly (id + encrypted_content
+// + summary/content) so it can be replayed to reasoning-mode backends.
 func (client *Client) appendReasoningItem(item responses.ResponseReasoningItem) {
-	param := item.ToParam()
-	if client.UseReasoningSummary {
-		for _, si := range item.Summary {
-			param.Summary = append(param.Summary, responses.ResponseReasoningItemSummaryParam{ Text: si.Text })
-		}
-	} else {
-		for _, ci := range item.Content {
-			param.Content = append(param.Content, responses.ResponseReasoningItemContentParam{ Text: ci.Text })
-		}		
+	r := &history.Reasoning{
+		ID:               item.ID,
+		EncryptedContent: item.EncryptedContent,
 	}
-	client.chatHistory = append(client.chatHistory, responses.ResponseInputItemUnionParam {
-		OfReasoning: &param,
-	})
+	for _, si := range item.Summary {
+		r.Summary = append(r.Summary, si.Text)
+	}
+	for _, ci := range item.Content {
+		r.Content = append(r.Content, ci.Text)
+	}
+	client.chatHistory.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
 }
 
 
@@ -132,31 +127,19 @@ func (client *Client) appendReasoningText(text string) {
 		return
 	}
 
-	reasoning := responses.ResponseReasoningItemParam{}
-	reasoning.ID = generateReasoningID()
-	reasoning.Type = constant.ValueOf[constant.Reasoning]()
-	reasoning.EncryptedContent = param.NewOpt("")
-
+	r := &history.Reasoning{ID: generateReasoningID()}
 	if client.UseReasoningSummary {
-		reasoning.Summary = []responses.ResponseReasoningItemSummaryParam{ {Text: text}, }
-		reasoning.Content = []responses.ResponseReasoningItemContentParam{}
+		r.Summary = []string{text}
 	} else {
-		reasoning.Content = []responses.ResponseReasoningItemContentParam{{Text: text}, } 
-		reasoning.Summary = []responses.ResponseReasoningItemSummaryParam{}
+		r.Content = []string{text}
 	}
-
-
-	client.chatHistory = append(client.chatHistory, responses.ResponseInputItemUnionParam{
-		OfReasoning: &reasoning,
-	})
+	client.chatHistory.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
 }
 
 
-// appends a list of images with a single prompt after them in the history
+// appends a user prompt (text and/or images) to the history as a single entry
 func (client *Client) AppendUserPrompt(prompt task.Prompt) {
-	content := responses.ResponseInputMessageContentListParam{}
-
-	dataURLs := make([]string, 0, len(prompt.Images))
+	entry := history.Entry{Type: history.EntryTypeUser, Text: prompt.Text}
 
 	hasImage := false
 	for _, img := range prompt.Images {
@@ -164,34 +147,114 @@ func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 		if mimeType == "" {
 			mimeType = "image/png"
 		}
-		dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, img.Base64Image)
-		dataURLs = append(dataURLs, dataURL)
-
-		content = append(content, responses.ResponseInputContentUnionParam{
-			OfInputImage: &responses.ResponseInputImageParam{
-				Detail:   responses.ResponseInputImageDetailAuto,
-				ImageURL: openai.String(dataURL),
-			},
+		entry.Images = append(entry.Images, history.Image{
+			Base64:   img.Base64Image,
+			MimeType: mimeType,
+			Detail:   string(responses.ResponseInputImageDetailAuto),
 		})
 		hasImage = true
 	}
 
+	client.chatHistory.Push(entry)
 
+	if hasImage {
+		client.triggerOnEvent(history.Token{Type: history.EntryTypeImage, Images: append([]history.Image(nil), entry.Images...)})
+		// separate the image from the text so the TUI renders them as two messages
+		client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+	}
 	if prompt.Text != "" {
-		content = append(content, responses.ResponseInputContentParamOfInputText(prompt.Text))
+		client.triggerOnEvent(history.Token{Type: history.EntryTypeUser, Text: prompt.Text})
+	}
+	client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+}
+
+// buildRequestInput reconstructs the OpenAI Responses input items from the
+// stored, lossless history. Called right before every request.
+func (client *Client) buildRequestInput() []responses.ResponseInputItemUnionParam {
+	return entriesToItems(client.chatHistory.Entries)
+}
+
+// entriesToItems converts history entries back into OpenAI input items,
+// preserving order and every field required to replay the conversation.
+func entriesToItems(entries []history.Entry) []responses.ResponseInputItemUnionParam {
+	items := make([]responses.ResponseInputItemUnionParam, 0, len(entries))
+
+	for _, e := range entries {
+		switch e.Type {
+		case history.EntryTypeUser:
+			items = append(items, userEntryToItem(e))
+
+		case history.EntryTypeAssistant:
+			msg := responses.ResponseInputItemParamOfMessage(e.Text, responses.EasyInputMessageRoleAssistant)
+			msg.OfMessage.Type = "message"
+			items = append(items, msg)
+
+		case history.EntryTypeReasoning:
+			if e.Reasoning == nil {
+				continue
+			}
+			items = append(items, reasoningEntryToItem(e.Reasoning))
+
+		case history.EntryTypeToolCall:
+			if e.ToolCall == nil {
+				continue
+			}
+			items = append(items, responses.ResponseInputItemParamOfFunctionCall(
+				e.ToolCall.Arguments, e.ToolCall.CallID, e.ToolCall.Name))
+
+		case history.EntryTypeToolResult:
+			if e.ToolResult == nil {
+				continue
+			}
+			items = append(items, responses.ResponseInputItemParamOfFunctionCallOutput(
+				e.ToolResult.CallID, e.ToolResult.Output))
+		}
+	}
+
+	return items
+}
+
+func userEntryToItem(e history.Entry) responses.ResponseInputItemUnionParam {
+	content := responses.ResponseInputMessageContentListParam{}
+
+	for _, img := range e.Images {
+		dataURL := fmt.Sprintf("data:%s;base64,%s", img.MimeType, img.Base64)
+		detail := responses.ResponseInputImageDetailAuto
+		if img.Detail != "" {
+			detail = responses.ResponseInputImageDetail(img.Detail)
+		}
+		content = append(content, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{
+				Detail:   detail,
+				ImageURL: openai.String(dataURL),
+			},
+		})
+	}
+
+	if e.Text != "" {
+		content = append(content, responses.ResponseInputContentParamOfInputText(e.Text))
 	}
 
 	msg := responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRoleUser)
 	msg.OfMessage.Type = "message"
-	client.chatHistory = append(client.chatHistory, msg)
+	return msg
+}
 
-	if hasImage {
-		client.triggerOnEvent(history.Token{Type: history.TokenTypeImage, Content: dataURLs})
+func reasoningEntryToItem(r *history.Reasoning) responses.ResponseInputItemUnionParam {
+	p := responses.ResponseReasoningItemParam{
+		ID:   r.ID,
+		Type: constant.ValueOf[constant.Reasoning](),
 	}
-	if prompt.Text != "" {
-		client.triggerOnEvent(history.Token{Type: history.TokenTypeUser, Content: []string{prompt.Text}})
+	if r.EncryptedContent != "" {
+		p.EncryptedContent = param.NewOpt(r.EncryptedContent)
 	}
-	client.triggerOnEvent(history.Token{Type: history.TokenEndOfSequence})
+	for _, s := range r.Summary {
+		p.Summary = append(p.Summary, responses.ResponseReasoningItemSummaryParam{Text: s})
+	}
+	for _, c := range r.Content {
+		p.Content = append(p.Content, responses.ResponseReasoningItemContentParam{Text: c})
+	}
+	return responses.ResponseInputItemUnionParam{OfReasoning: &p}
 }
 
 // returns request opts for ask stream and compress

@@ -178,10 +178,10 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token history.Token) {
 	switch token.Type {
-	case history.TokenEndOfSequence:
+	case history.EntryEndOfSequence:
 		tui.mergeTokens()
 	default:
-		if token.Type != history.TokenTypeReasoning || tui.showReasoning {
+		if token.Type != history.EntryTypeReasoning || tui.showReasoning {
 			tui.tokens = append(tui.tokens, token)
 		}
 	}
@@ -199,8 +199,8 @@ func (tui *Tui) waitForToken() tea.Cmd {
 			first = (<-tui.inputChan).Copy()
 		}
 
-		if first.Type != history.TokenTypeReasoning &&
-			first.Type != history.TokenTypeAssistant {
+		if first.Type != history.EntryTypeReasoning &&
+			first.Type != history.EntryTypeAssistant {
 			return first
 		}
 
@@ -208,7 +208,7 @@ func (tui *Tui) waitForToken() tea.Cmd {
 			select {
 			case token := <-tui.inputChan:
 				if token.Type == first.Type {
-					first.Content[0] += token.Content[0]
+					first.Text += token.Text
 				} else {
 					tui.pendingToken = &token
 					return first
