@@ -7,6 +7,7 @@ import (
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/commands"
 	"github.com/alex0esc/ceres/internal/constants"
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms"
 	_ "github.com/alex0esc/ceres/internal/platforms"
@@ -78,6 +79,7 @@ func Shutdown() {
 	cronLib = nil
 	cfg = nil
 	wakeup.DbClose()
+	history.StorageClose()
 	tool.ClearRegistry()
 	platform.ClearRegistry()
 	command.ClearRegistry()
@@ -124,6 +126,12 @@ func loadConfigs() error {
 		return fmt.Errorf("error loading wakeups from wakeups.toml: %v", err)
 	}
 	wakeup.DbOpen()
+
+	// open the history db before loading agents, so each agent can restore its chat history
+	if err := history.StorageOpen(); err != nil {
+		return fmt.Errorf("error opening history database: %v", err)
+	}
+
 	agents, err = agent.LoadAgentsFromDir(endpoints, cronLib)
 	if err != nil {
 		return fmt.Errorf("error loading agents: %v", err)

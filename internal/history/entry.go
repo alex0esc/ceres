@@ -20,42 +20,42 @@ const (
 // Reasoning holds everything needed to replay a native reasoning item back to
 // the provider (id + encrypted_content) as well as the human readable text.
 type Reasoning struct {
-	ID               string
-	EncryptedContent string
-	Summary          []string
-	Content          []string
+	ID               string   `json:"id,omitempty"`
+	EncryptedContent string   `json:"encrypted_content,omitempty"`
+	Summary          []string `json:"summary,omitempty"`
+	Content          []string `json:"content,omitempty"`
 }
 
 // ToolCall is a function call requested by the model. CallID links it to the
 // matching ToolResult and is required to rebuild a valid request.
 type ToolCall struct {
-	Name      string
-	Arguments string
-	CallID    string
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+	CallID    string `json:"call_id"`
 }
 
 // ToolResult is the output for a ToolCall, linked by CallID.
 type ToolResult struct {
-	CallID string
-	Output string
+	CallID string `json:"call_id"`
+	Output string `json:"output"`
 }
 
 // Image is a base64 image with its mime type and detail level.
 type Image struct {
-	Base64   string
-	MimeType string
-	Detail   string
+	Base64   string `json:"base64"`
+	MimeType string `json:"mime_type"`
+	Detail   string `json:"detail,omitempty"`
 }
 
 // Entry is a single, lossless unit of the chat history. Depending on Type the
 // matching field is populated; Text also carries streamed deltas.
 type Entry struct {
-	Type       EntryType
-	Text       string
-	Reasoning  *Reasoning
-	ToolCall   *ToolCall
-	ToolResult *ToolResult
-	Images     []Image
+	Type       EntryType   `json:"type"`
+	Text       string      `json:"text,omitempty"`
+	Reasoning  *Reasoning  `json:"reasoning,omitempty"`
+	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
+	Images     []Image     `json:"images,omitempty"`
 }
 
 // Token is an Entry used as a streamed delta or lifecycle event (as opposed to

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/alex0esc/ceres/internal/history"
@@ -70,6 +71,11 @@ func (agent *Agent) worker() {
 			Done:
 			cancel()
 			agent.currentTask = nil
+
+			// persist the agent's chat history after every finished task
+			if err := history.StorageSave(agent.name, agent.Client.History); err != nil {
+				slog.Error("failed to persist history", "agent", agent.name, "error", err)
+			}
 		}
 	}
 }

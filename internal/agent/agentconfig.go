@@ -2,12 +2,14 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/alex0esc/ceres/internal/constants"
+	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/openai/openai-go/v3/responses"
@@ -77,6 +79,15 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 			}
 			client.RegisterTool(tool.Get(toolName))
 		}
+
+		// restore the agent's persisted chat history; a failure must not stop the
+		// agent from starting, it just begins with an empty history
+		loadedHistory, err := history.StorageLoad(name)
+		if err != nil {
+			slog.Warn("failed to load persisted history, starting with empty history", "agent", name, "error", err)
+			loadedHistory = history.History{}
+		}
+		client.History = loadedHistory
 
 		agnt, err := NewAgent(name, cfg.Description, client, cfg.Subagent, cronLib)
 		if err != nil {
