@@ -86,6 +86,10 @@ func newTextArea() textarea.Model {
 	ta.SetHeight(4)
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
+	taStyles := ta.Styles()
+    taStyles.Focused.CursorLine = taStyles.Focused.CursorLine.Background(ThemeColorBackground)
+    taStyles.Blurred.CursorLine = taStyles.Blurred.CursorLine.Background(ThemeColorBackground)
+    ta.SetStyles(taStyles)
 	return ta
 }
 

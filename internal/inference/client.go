@@ -27,9 +27,9 @@ type Client struct {
 	SystemPrompt    string
 
 	// history
-	chatHistory     []responses.ResponseInputItemUnionParam
+	History         history.History
 	partialAnswer   []history.Token
-    onEvent func(history.Token)
+	onEvent         func(history.Token)
 	
 
 	// tools
@@ -41,9 +41,6 @@ type Client struct {
     mutex           sync.Mutex
     cancelActiveRun context.CancelFunc
 
-
-    // usage
-    TotalTokens int64
 
     // compression
     CompressionThreshold int64
@@ -68,7 +65,7 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 
 
 // executes all items found in a response output in their original order:
-// message-text items are appended to chatHistory as assistant turns,
+// message-text items are appended to the history as assistant turns,
 // function-call items are executed and their call+result appended.
 // Returns the concatenated assistant text found in this output, whether
 // any tool calls were found, and an error if one occurred.
@@ -80,24 +77,24 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 		switch v := item.AsAny().(type) {
 
 		//put reasoning in the chat history for the bot to have more context
-		case responses.ResponseReasoningItem:    		
+		case responses.ResponseReasoningItem:
 			if client.UseReasoningSummary {
 				for _, part := range v.Summary {
-					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ part.Text }})
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Text: part.Text })
 				}
 			} else {
 				for _, part := range v.Content {
-					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Content: []string{ part.Text }})
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeReasoning, Text: part.Text })
 				}
 			}
 			client.appendReasoningItem(v)
 
-			
+
 		case responses.ResponseOutputMessage:
 			for _, part := range v.Content {
 				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
 					client.appendAssistantMessage(t.Text)
-					fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistant, Content: []string{ t.Text }})
+					fullAnswer.Push(history.Entry{ Type: history.EntryTypeAssistant, Text: t.Text })
 				}
 			}
 
@@ -105,18 +102,19 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 		case responses.ResponseFunctionToolCall:
 			foundCall = true
 
-			client.chatHistory = append(client.chatHistory,
-				responses.ResponseInputItemParamOfFunctionCall(v.Arguments, v.CallID, v.Name),
-			)
-
-			// fires as soon as a new output item starts; used here to
-			fullAnswer.Push(history.Entry{ Type: history.EntryTypeToolCall, Content: []string{ v.Name, v.Arguments }})
-			client.triggerOnEvent(history.Token {Type: history.TokenTypeToolCall, Content: []string{ v.Name, v.Arguments }})
-			client.triggerOnEvent(history.Token {Type: history.TokenEndOfSequence })
+			call := history.Entry{Type: history.EntryTypeToolCall, ToolCall: &history.ToolCall{
+				Name:      v.Name,
+				Arguments: v.Arguments,
+				CallID:    v.CallID,
+			}}
+			client.History.Push(call)
+			fullAnswer.Push(call.Copy())
+			client.triggerOnEvent(call.Copy())
+			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
 
 			tool, ok := client.tools[v.Name]
 
-			
+
 
 			var result string
 			if !ok {
@@ -130,14 +128,14 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 				}
 			}
 
-			client.chatHistory = append(client.chatHistory,
-				responses.ResponseInputItemParamOfFunctionCallOutput(v.CallID, result),
-			)
-
-			// fires as soon as a tool call is finished
-			fullAnswer.Push(history.Entry{ Type: history.EntryTypeToolResult, Content: []string{ result }})
-			client.triggerOnEvent(history.Token {Type: history.TokenTypeToolResult, Content: []string{ result }})
-			client.triggerOnEvent(history.Token {Type: history.TokenEndOfSequence })
+			resultEntry := history.Entry{Type: history.EntryTypeToolResult, ToolResult: &history.ToolResult{
+				CallID: v.CallID,
+				Output: result,
+			}}
+			client.History.Push(resultEntry)
+			fullAnswer.Push(resultEntry.Copy())
+			client.triggerOnEvent(resultEntry.Copy())
+			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
 
 		}
 	}
@@ -171,9 +169,12 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 	// keyed by output index, so we don't emit StreamEventToolCallStarted twice
 	// for the same item if the SDK emits multiple related events for it
 	var fullAnswer history.History
+	// context size before this answer; the answer's token count is how much the
+	// total grew during it (generated output plus any tool results added meanwhile)
+	startTokens := client.History.TotalTokens
 	defer func() { client.partialAnswer = nil }()
 	for i := 0; i < client.MaxToolIterations; i++ {
-		if client.TotalTokens > client.CompressionThreshold {
+		if client.History.TotalTokens > client.CompressionThreshold {
 			if err := client.CompressHistory(runCtx); err != nil {
 				return nil, err, false
 			}
@@ -183,7 +184,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			Model:        client.modelName,
 			Instructions: openai.String(client.SystemPrompt),
 			Input: responses.ResponseNewParamsInputUnion{
-				OfInputItemList: client.chatHistory,
+				OfInputItemList: client.buildRequestInput(),
 			},
 			Reasoning: responses.ReasoningParam{
 				Effort: client.ReasoningEffort,
@@ -202,26 +203,26 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 				if !client.UseReasoningSummary {
 					continue
 				}
-				token := history.Token {Type: history.TokenTypeReasoning, Content: []string { event.Delta } }
+				token := history.Token{Type: history.EntryTypeReasoning, Text: event.Delta}
 				client.partialAnswer = append(client.partialAnswer, token)
-				client.triggerOnEvent(token)				
+				client.triggerOnEvent(token)
 
-			case responses.ResponseReasoningTextDeltaEvent: 
+			case responses.ResponseReasoningTextDeltaEvent:
 				if client.UseReasoningSummary {
 					continue
 				}
-				token := history.Token {Type: history.TokenTypeReasoning, Content: []string { event.Delta } }
+				token := history.Token{Type: history.EntryTypeReasoning, Text: event.Delta}
 				client.partialAnswer = append(client.partialAnswer, token)
-				client.triggerOnEvent(token)				
+				client.triggerOnEvent(token)
 
 			case responses.ResponseTextDeltaEvent:
-				token := history.Token {Type: history.TokenTypeAssistant, Content: []string { event.Delta } }
+				token := history.Token{Type: history.EntryTypeAssistant, Text: event.Delta}
 				client.partialAnswer = append(client.partialAnswer, token)
-				client.triggerOnEvent(token)				
+				client.triggerOnEvent(token)
 
-			case responses.ResponseOutputItemAddedEvent: 
+			case responses.ResponseOutputItemAddedEvent:
 				if _, ok := e.Item.AsAny().(responses.ResponseOutputMessage); ok || e.Item.Type == "message" {
-					token := history.Token { Type: history.TokenEndOfSequence }
+					token := history.Token{Type: history.EntryEndOfSequence}
 					client.partialAnswer = append(client.partialAnswer, token)
 					client.triggerOnEvent(token)
 				}
@@ -229,21 +230,21 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			case responses.ResponseCompletedEvent:
 				// contains the final, complete output including finished function calls
 				finalOutput = e.Response.Output
-				client.TotalTokens = e.Response.Usage.TotalTokens
+				client.History.TotalTokens = e.Response.Usage.TotalTokens
 			}
 		}
 
-		client.triggerOnEvent(history.Token { Type: history.TokenEndOfSequence })
+		client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
 
 		if errors.Is(stream.Err(), context.Canceled) {
 			var reason strings.Builder
 			var normal strings.Builder
 			for _, token := range client.partialAnswer {
 				switch token.Type {
-				case history.TokenTypeReasoning:
-					reason.WriteString(token.Content[0])
-				case history.TokenTypeAssistant:
-					normal.WriteString(token.Content[0])
+				case history.EntryTypeReasoning:
+					reason.WriteString(token.Text)
+				case history.EntryTypeAssistant:
+					normal.WriteString(token.Text)
 				}
 			}
 			if reason.Len() > 0 {
@@ -252,6 +253,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			if normal.Len() > 0 {
 				client.appendAssistantMessage(normal.String())
 			}
+			fullAnswer.TotalTokens = max(0, client.History.TotalTokens-startTokens)
 			return &fullAnswer, nil, true
 		}
 
@@ -263,6 +265,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 
 		client.partialAnswer = nil
 		if !client.handleToolCalls(runCtx, finalOutput, handle, &fullAnswer) {
+			fullAnswer.TotalTokens = max(0, client.History.TotalTokens-startTokens)
 			return &fullAnswer, nil, false
 		}
 	}

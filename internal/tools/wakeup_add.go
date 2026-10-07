@@ -52,13 +52,13 @@ func (t WakeupAddTool) Description() string {
 		repeatNote = "You may create both one-shot (fire_at) and recurring (cron_spec) wakeups. Exactly one must be set."
 	}
 
-	contextNote := "The wakeup starts with a completely fresh context - no memory of current conversation or other wakeups. Prompts must be fully self-contained with all context, goal, constraints, and expected result."
+	contextNote := "The wakeup starts with a completely fresh context - no memory of current conversation or other wakeups. The prompt must be fully self-contained with all context, goal, constraints, and expected result."
 	if !t.clearHistory {
-		contextNote = "The wakeup keeps the agent's existing conversation history, allowing it to build on previous context. Prompts can reference earlier conversations and decisions."
+		contextNote = "The wakeup keeps the agent's existing conversation history, allowing it to build on previous context. The prompt can reference earlier conversations and decisions."
 	}
 
 	return fmt.Sprintf("Create a new scheduled wakeup for this agent. Use wakeup_list first to see existing wakeups and avoid name conflicts. "+
-		"Required: name (unique), description, at least one prompt, and exactly one of fire_at or cron_spec. "+
+		"Required: name (unique), description, a prompt, and exactly one of fire_at or cron_spec. "+
 		"%s "+
 		"Timeout is %s (controlled by user, cannot be changed). Always use %s timezone for fire_at. %s",
 		contextNote,
@@ -80,11 +80,9 @@ func (WakeupAddTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Short description of what this wakeup does",
 			},
-			"prompts": map[string]any{
-				"type":        "array",
-				"items":       map[string]any{"type": "string"},
-				"minItems":    1,
-				"description": "One or more prompts combined into a single message when the wakeup fires.",
+			"prompt": map[string]any{
+				"type":        "string",
+				"description": "The prompt message sent when the wakeup fires.",
 			},
 			"fire_at": map[string]any{
 				"type":        "string",
@@ -95,7 +93,7 @@ func (WakeupAddTool) Parameters() map[string]any {
 				"description": "Cron schedule for recurring wakeup (e.g. \"0 9 * * 1-5\"). Mutually exclusive with fire_at.",
 			},
 		},
-		"required":             []string{"name", "description", "prompts"},
+		"required":             []string{"name", "description", "prompt"},
 		"additionalProperties": false,
 	}
 }
@@ -109,11 +107,11 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 		}
 
 		var args struct {
-			Name        string   `json:"name"`
-			Description string   `json:"description"`
-			Prompts     []string `json:"prompts"`
-			FireAt      string   `json:"fire_at"`
-			CronSpec    string   `json:"cron_spec"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Prompt      string `json:"prompt"`
+			FireAt      string `json:"fire_at"`
+			CronSpec    string `json:"cron_spec"`
 		}
 
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
@@ -130,9 +128,9 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("wakeup_add: description is required")
 		}
 
-		prompt := joinPrompts(args.Prompts)
+		prompt := strings.TrimSpace(args.Prompt)
 		if prompt == "" {
-			return "", fmt.Errorf("wakeup_add: prompts must contain at least one non-empty entry")
+			return "", fmt.Errorf("wakeup_add: prompt is required")
 		}
 
 		hasFireAt := strings.TrimSpace(args.FireAt) != ""
@@ -186,16 +184,4 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 
 		return string(out), nil
 	}
-}
-
-// joinPrompts combines the prompts into the single prompt a wakeup stores: empty
-// entries are dropped, the rest is joined in order, separated by a blank line.
-func joinPrompts(prompts []string) string {
-	parts := make([]string, 0, len(prompts))
-	for _, p := range prompts {
-		if p = strings.TrimSpace(p); p != "" {
-			parts = append(parts, p)
-		}
-	}
-	return strings.Join(parts, "\n\n")
 }
