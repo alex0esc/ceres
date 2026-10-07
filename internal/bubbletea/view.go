@@ -2,24 +2,44 @@ package bubbletea
 
 import (
 	"fmt"
+	"image/color"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
-var (
-	ThemeColorInfoBar   = lipgloss.Color("#8BE9FD") // Dracula Cyan
-	ThemeColorSelected  = lipgloss.Color("#FFB86C") // Dracula Orange
-	ThemeColorBorder    = lipgloss.Color("#6272A4") // Dracula Current Line
-	ThemeColorInactive  = lipgloss.Color("#44475A") // Dracula Comment
-	ThemeColorSystem    = lipgloss.Color("#40E0D0")
-	ThemeColorUser      = lipgloss.Color("#AAAAFF")
-	ThemeColorReasoning = lipgloss.Color("#999999")
-	ThemeColorAgentInfo = lipgloss.Color("#FDFD96")
-)
+// paints the whole background in one color
+func paint(content string, bg color.Color, w, h int) string {
+	if w <= 0 || h <= 0 {
+		return content
+	}
+
+	r, g, b, _ := bg.RGBA()
+	bgSeq := fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r>>8, g>>8, b>>8)
+
+	content = strings.NewReplacer(
+		"\x1b[0m", "\x1b[0m"+bgSeq,
+		"\x1b[m", "\x1b[m"+bgSeq,
+		"\x1b[49m", bgSeq,
+	).Replace(content)
+
+	lines := strings.Split(content, "\n")
+	out := make([]string, h)
+	for i := range out {
+		line := ""
+		if i < len(lines) {
+			line = ansi.Truncate(lines[i], w, "")
+		}
+		pad := max(0, w-ansi.StringWidth(line))
+		out[i] = bgSeq + line + strings.Repeat(" ", pad) + "\x1b[0m"
+	}
+	return strings.Join(out, "\n")
+}
 
 func (tui *Tui) View() tea.View {
-	v := tea.NewView(tui.content())
+	v := tea.NewView(paint(tui.content(), ThemeColorBackground, tui.width, tui.height))
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v

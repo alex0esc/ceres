@@ -6,7 +6,6 @@ import (
 
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -14,7 +13,7 @@ import (
 
 func (tui *Tui) newRendererAgent(width int) glamour.TermRenderer {
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStyles(styles.DraculaStyleConfig),
+		glamour.WithStyles(markdownStyle()),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
@@ -26,7 +25,7 @@ func (tui *Tui) newRendererAgent(width int) glamour.TermRenderer {
 
 
 func (tui *Tui) newRendererUser(width int) glamour.TermRenderer {
-    style := styles.DraculaStyleConfig
+    style := markdownStyle()
     margin := uint(5)
 
     style.Document.Margin = &margin

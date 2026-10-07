@@ -144,6 +144,9 @@ func (tui *Tui) applyListSelection() {
 
 // changes the size of the components accordingly
 func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
+	tui.width = msg.Width
+	tui.height = msg.Height
+
 	rightWidth := max(msg.Width-listWidth-2, 10)
 	viewportHeight := msg.Height - footerHeight
 	tui.rendererUser = tui.newRendererUser(rightWidth)

@@ -27,6 +27,9 @@ type Tui struct {
 	textarea   textarea.Model
 	list       list.Model
 	ready      bool
+
+	width      int
+	height     int
 	focus      focusState
 
 	rendererUser   glamour.TermRenderer
