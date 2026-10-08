@@ -59,11 +59,13 @@ func (tui *Tui) content() string {
 		inputBoxStyle.Render(tui.textarea.View()),
 	)
 
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listStyle.Render(tui.list.View()),
-		rightPanel,
-	)
+	return lipgloss.NewStyle().
+		Padding(0, 1).
+		Render(lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			listStyle.Render(tui.list.View()),
+			rightPanel,
+		))
 }
 
 func (tui *Tui) styles() (list, info, input lipgloss.Style) {
@@ -100,12 +102,18 @@ func (tui *Tui) getInfoTextString() string {
 
 	client := tui.selectedAgent.Client
 	text := fmt.Sprintf(
-		"Agent: %s\tTokens: %v/%v\tStatus: %s",
+		"Agent: %s   Tokens: %v/%v   Status: %s",
 		tui.selectedAgent.Name(),
 		client.History.TotalTokens,
 		client.CompressionThreshold,
 		tui.selectedAgent.State(),
 	)
+
+	// keep it single line: the info style has Padding(0, 1), so the usable
+	// inner width is the viewport width minus the padding plus a small safety
+	// margin so the tail never wraps to the next line.
+	inner := max(tui.viewport.Width()-4, 0)
+	text = ansi.Truncate(text, inner, "…")
 
 	return lipgloss.NewStyle().Foreground(ThemeColorAgentInfo).Render(text)
 }

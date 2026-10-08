@@ -147,10 +147,11 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	tui.width = msg.Width
 	tui.height = msg.Height
 
-	rightWidth := max(msg.Width-listWidth-2, 10)
+	// -2 list border, -2 outer padding (1 cell left + 1 cell right gutter)
+	rightWidth := max(msg.Width-listWidth-4, 10)
 	viewportHeight := msg.Height - footerHeight
-	tui.rendererUser = tui.newRendererUser(rightWidth)
-	tui.rendererAgent = tui.newRendererAgent(rightWidth)
+	tui.rendererUser = tui.newRendererUser(rightWidth + 2)
+	tui.rendererAgent = tui.newRendererAgent(rightWidth + 2)
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(
@@ -171,10 +172,11 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	} else {
 		tui.viewport.SetWidth(rightWidth)
 		tui.viewport.SetHeight(viewportHeight)
+		tui.loadAgentHistory()
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
-	tui.textarea.SetWidth(rightWidth - 4)
+	tui.textarea.SetWidth(rightWidth - 2)
 	tui.viewport.SetContent(tui.getContentString())
 }
 
