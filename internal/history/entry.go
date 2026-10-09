@@ -14,7 +14,11 @@ const (
 	EntryTypeToolCall
 	EntryTypeToolResult
 	EntryTypeImage
-	EntryEndOfSequence
+
+	// TokenType* are not stored in the history; they are streaming lifecycle
+	// signals sent to consumers (e.g. the TUI) alongside the token stream.
+	TokenTypeEndOfSequence
+	TokenTypeResetChat
 )
 
 // Reasoning holds everything needed to replay a native reasoning item back to

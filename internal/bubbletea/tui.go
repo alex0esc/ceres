@@ -48,6 +48,9 @@ type Tui struct {
 
 	inputChan chan history.Token
 	pendingToken  *history.Token
+
+	//drives status animations (spinner frames)
+	tickFrame int
 }
 
 

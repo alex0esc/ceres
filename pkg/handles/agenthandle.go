@@ -18,13 +18,13 @@ const (
 func (s AgentState) String() string {
 	switch s {
 	case AgentStateIdle:
-		return "idle"
+		return "Idle"
 	case AgentStateBusy:
-		return "busy"
+		return "Busy"
 	case AgentStateStopped:
-		return "stopped"
+		return "Stopped"
 	default:
-		return "unknown"
+		return "Unknown"
 	}
 }
 

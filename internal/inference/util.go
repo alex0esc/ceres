@@ -32,6 +32,7 @@ func (client *Client) RegisterTool(t tool.Tool) {
 // resets the chat history of the client
 func (client *Client) ClearHistory() {
 	client.History = history.History{}
+	client.triggerOnEvent(history.Token{Type: history.TokenTypeResetChat})
 }
 
 
@@ -159,19 +160,14 @@ func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 	if hasImage {
 		client.triggerOnEvent(history.Token{Type: history.EntryTypeImage, Images: append([]history.Image(nil), entry.Images...)})
 		// separate the image from the text so the TUI renders them as two messages
-		client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+		client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 	}
 	if prompt.Text != "" {
 		client.triggerOnEvent(history.Token{Type: history.EntryTypeUser, Text: prompt.Text})
 	}
-	client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+	client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 }
 
-// buildRequestInput reconstructs the OpenAI Responses input items from the
-// stored, lossless history. Called right before every request.
-func (client *Client) buildRequestInput() []responses.ResponseInputItemUnionParam {
-	return entriesToItems(client.History.Entries)
-}
 
 // entriesToItems converts history entries back into OpenAI input items,
 // preserving order and every field required to replay the conversation.

@@ -30,6 +30,10 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case history.Token:
 		tui.handleTokenMsg(msg)
 		cmds = append(cmds, tui.waitForToken())
+
+	case tickMsg:
+		tui.tickFrame++
+		cmds = append(cmds, tui.tick())
 	}
 
 	// tea.PasteMsg (Bracketed Paste) läuft hier automatisch mit durch
@@ -147,10 +151,12 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	tui.width = msg.Width
 	tui.height = msg.Height
 
-	rightWidth := max(msg.Width-listWidth-2, 10)
-	viewportHeight := msg.Height - footerHeight
-	tui.rendererUser = tui.newRendererUser(rightWidth)
-	tui.rendererAgent = tui.newRendererAgent(rightWidth)
+	// -2 list border, -2 outer padding (1 cell left + 1 cell right gutter)
+	rightWidth := max(msg.Width-listWidth-4, 10)
+	// -2 for the blank spacer lines above and below the chat viewport
+	viewportHeight := msg.Height - footerHeight - 2
+	tui.rendererUser = tui.newRendererUser(rightWidth + 2)
+	tui.rendererAgent = tui.newRendererAgent(rightWidth + 2)
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(
@@ -171,18 +177,23 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	} else {
 		tui.viewport.SetWidth(rightWidth)
 		tui.viewport.SetHeight(viewportHeight)
+		tui.loadAgentHistory()
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
-	tui.textarea.SetWidth(rightWidth - 4)
+	tui.textarea.SetWidth(rightWidth - 2)
 	tui.viewport.SetContent(tui.getContentString())
 }
 
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token history.Token) {
 	switch token.Type {
-	case history.EntryEndOfSequence:
+	case history.TokenTypeEndOfSequence:
 		tui.mergeTokens()
+	case history.TokenTypeResetChat:
+		// the history was replaced (compressed/cleared); drop any in-flight
+		// tokens and rebuild the view from the client's authoritative history
+		tui.loadAgentHistory()
 	default:
 		if token.Type != history.EntryTypeReasoning || tui.showReasoning {
 			tui.tokens = append(tui.tokens, token)

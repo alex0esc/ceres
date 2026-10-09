@@ -155,7 +155,7 @@ func (tui *Tui) mergeTokens() {
 		text.WriteString(token.String())
 	}
 	switch tui.tokens[0].Type {
-	case history.EntryTypeAssistant, history.EntryEndOfSequence:
+	case history.EntryTypeAssistant, history.TokenTypeEndOfSequence:
 		tui.appendAgentMessage(text.String())
 	case history.EntryTypeUser:
 		tui.appendUserMessage(text.String())

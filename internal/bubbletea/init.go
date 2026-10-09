@@ -111,5 +111,14 @@ func (tui *Tui) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmds = append(cmds, tui.waitForToken())
 	cmds = append(cmds, textarea.Blink)
+	cmds = append(cmds, tui.tick())
 	return tea.Batch(cmds...)
+}
+
+// tickMsg is a periodic signal that advances the status animations.
+type tickMsg time.Time
+
+// tick schedules the next animation frame.
+func (tui *Tui) tick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
 }

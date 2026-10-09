@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -54,16 +55,20 @@ func (tui *Tui) content() string {
 
 	rightPanel := lipgloss.JoinVertical(
 		lipgloss.Left,
+		"",
 		tui.viewport.View(),
+		"",
 		infoBoxStyle.Render(tui.getInfoTextString()),
 		inputBoxStyle.Render(tui.textarea.View()),
 	)
 
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listStyle.Render(tui.list.View()),
-		rightPanel,
-	)
+	return lipgloss.NewStyle().
+		Padding(0, 1).
+		Render(lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			listStyle.Render(tui.list.View()),
+			rightPanel,
+		))
 }
 
 func (tui *Tui) styles() (list, info, input lipgloss.Style) {
@@ -99,13 +104,57 @@ func (tui *Tui) getInfoTextString() string {
 	}
 
 	client := tui.selectedAgent.Client
-	text := fmt.Sprintf(
-		"Agent: %s\tTokens: %v/%v\tStatus: %s",
-		tui.selectedAgent.Name(),
-		client.History.TotalTokens,
-		client.CompressionThreshold,
-		tui.selectedAgent.State(),
-	)
+	used := client.History.TotalTokens
+	threshold := client.CompressionThreshold
 
-	return lipgloss.NewStyle().Foreground(ThemeColorAgentInfo).Render(text)
+	// status: spinner while working, solid marker otherwise
+	var status string
+	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	switch {
+	case client.IsCompressing():
+		status = spinner[tui.tickFrame%len(spinner)] + " Compressing"
+	case tui.selectedAgent.State() == handles.AgentStateBusy:
+		status = spinner[tui.tickFrame%len(spinner)] + " Busy"
+	case tui.selectedAgent.State() == handles.AgentStateIdle:
+		status = "▣ Idle"
+	case tui.selectedAgent.State() == handles.AgentStateStopped:
+		status = "▣ Stopped"
+	default:
+		status = tui.selectedAgent.State().String()
+	}
+
+	infoStyle := lipgloss.NewStyle().Foreground(ThemeColorAgentInfo)
+	sep := infoStyle.Render("   •   ")
+
+	statusSeg := infoStyle.Render(status)
+	barSeg := infoStyle.Render(progressBar(used, threshold, 20) + " " + formatK(used))
+	agent := infoStyle.Copy().Bold(true).Render(tui.selectedAgent.Name())
+
+	text := agent + sep + barSeg + sep + statusSeg
+
+	// keep it single line: the info style has Padding(0, 1), so the usable
+	// inner width is the viewport width minus the padding plus a small safety
+	// margin so the tail never wraps to the next line.
+	inner := max(tui.viewport.Width()-4, 0)
+	text = ansi.Truncate(text, inner, "…")
+
+	return text
+}
+
+// formatK renders a token count in thousands with a k suffix (e.g. 26000 -> 26k).
+func formatK(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%dk", n)
+	}
+	return fmt.Sprintf("%dk", (n+500)/1000)
+}
+
+// progressBar renders a fixed-width usage bar filled relative to threshold.
+func progressBar(used, threshold int64, width int) string {
+	filled := 0
+	if threshold > 0 {
+		filled = int(float64(used) / float64(threshold) * float64(width))
+		filled = min(max(filled, 0), width)
+	}
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 }

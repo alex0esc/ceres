@@ -13,6 +13,13 @@ import (
 // CompressHistory compresses older messages in the history when total token count exceeds limits.
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
 func (client *Client) CompressHistory(ctx context.Context) error {
+	totalMessages := len(client.History.Entries)
+
+	// Return early if there are not enough messages to trigger compression
+	if totalMessages <= client.NumMessagesToKeep {
+		return nil
+	}
+
 	client.mutex.Lock()
 	if client.cancelActiveRun == nil {
 
@@ -29,72 +36,87 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 		}()		
 	}
 
+	client.isCompressing = true
+	defer func() {
+		client.mutex.Lock()
+		client.isCompressing = false
+		client.mutex.Unlock()
+	}()
 	client.mutex.Unlock()
 
-	totalMessages := len(client.History.Entries)
-
-	// Return early if there are not enough messages to trigger compression
-	if totalMessages <= client.NumMessagesToKeep {
-		return nil
-	}
+	
 
 	cutoff := totalMessages - client.NumMessagesToKeep
 	toCompress := client.History.Entries[:cutoff]
 	toKeep := client.History.Entries[cutoff:]
 
-	prompt := client.CompressionPrompt
-	if prompt == "" {
-		return fmt.Errorf("There is no compression promt given for the client with model %s.", client.modelName)
+	if client.CompressionPrompt == "" {
+		return fmt.Errorf("There is no compression promt given for the client with model %s", client.modelName)
 	}
 
-	// 1. Prepare payload for the non-streaming compression call
+	// 1. Only the older entries are summarized; the recent ones are kept verbatim
+	// and re-appended afterwards, so they are not sent to the model here.
 	inputItems := entriesToItems(toCompress)
-	prompt = "[System] " + prompt
-	promptMsg := responses.ResponseInputItemParamOfMessage(prompt, responses.EasyInputMessageRoleUser)
+	promptMsg := responses.ResponseInputItemParamOfMessage(client.CompressionPrompt, responses.EasyInputMessageRoleUser)
 	promptMsg.OfMessage.Type = "message"
 	inputItems = append(inputItems, promptMsg)
-	client.triggerOnEvent(history.Token{ Type: history.EntryTypeUser, Text: prompt })
-	client.triggerOnEvent(history.Token{ Type: history.EntryEndOfSequence })
 
-	// 2. Execute synchronous (non-streaming) API request WITHOUT tools
-	// leave everything as is for better caching efficency
-	resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
-		Model:        client.modelName,
-		Instructions: openai.String("You are an assistant whose task is to summarize the current chat. Do not ask questions, execute your task in one turn."),
-		Input: responses.ResponseNewParamsInputUnion{
-			OfInputItemList: inputItems,
+	// 2. Loop with tools left enabled. If the model tries to call a tool, echo the
+	// call back and reject it via a function_call_output error so it retries with
+	// plain text. The first turn that contains no tool call is the summary.
+	var summary string
+	for i := 0; i < client.MaxToolIterations; i++ {
+		resp, err := client.endpoint.client.Responses.New(ctx, responses.ResponseNewParams{
+			Model:        client.modelName,
+			Instructions: openai.String(client.SystemPrompt),
+			Input: responses.ResponseNewParamsInputUnion{
+				OfInputItemList: inputItems,
+			},
+			Reasoning: responses.ReasoningParam{
+				Effort: client.ReasoningEffort,
+			},
+			Tools: client.toolParams,
 		},
-		Tools: client.toolParams, 
-		Reasoning: responses.ReasoningParam{
-			Effort: client.ReasoningEffort,
-		},
-	},
-	client.requestOpts()...
-	)
-	if err != nil {
-		return fmt.Errorf("failed to compress history: %w", err)
-	}
+		client.requestOpts()...
+		)
+		if err != nil {
+			return fmt.Errorf("failed to compress history: %w", err)
+		}
 
-	// 3. Extract generated summary text from response output
-	var summaryBuilder strings.Builder
-	for _, item := range resp.Output {
-		if msg, ok := item.AsAny().(responses.ResponseOutputMessage); ok {
-			for _, part := range msg.Content {
-				if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
-					summaryBuilder.WriteString(t.Text)
+		var summaryBuilder strings.Builder
+		toolCallFound := false
+		for _, item := range resp.Output {
+			switch v := item.AsAny().(type) {
+			case responses.ResponseFunctionToolCall:
+				toolCallFound = true
+				inputItems = append(inputItems,
+					responses.ResponseInputItemParamOfFunctionCall(v.Arguments, v.CallID, v.Name),
+					responses.ResponseInputItemParamOfFunctionCallOutput(v.CallID,
+						`{"error":"tool calls are disabled during compression; output the summary text now"}`),
+				)
+			case responses.ResponseOutputMessage:
+				for _, part := range v.Content {
+					if t, ok := part.AsAny().(responses.ResponseOutputText); ok {
+						summaryBuilder.WriteString(t.Text)
+					}
 				}
 			}
 		}
+
+		if !toolCallFound {
+			summary = summaryBuilder.String()
+			break
+		}
 	}
 
-	if summaryBuilder.String() == "" {
+	if summary == "" {
 		return fmt.Errorf("compression yielded an empty summary")
 	}
 
 	// 4. Rebuild chat history: [Summary turn] + [unmodified recent messages]
 	newHistory := make([]history.Entry, 0, 1+len(toKeep))
 
-	summaryStr := "[Summary of previous conversation]\n\n" + summaryBuilder.String() + "\n\n[End of summary]"
+	summaryStr := "[Summary of previous conversation]\n\n" + summary + "\n\n[End of summary]"
 	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summaryStr})
 	newHistory = append(newHistory, toKeep...)
 
@@ -103,7 +125,16 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	client.mutex.Lock()
 	client.History = history.History{Entries: newHistory}
 	client.mutex.Unlock()
-	client.triggerOnEvent(history.Token{ Type: history.EntryTypeUser, Text: summaryStr })
-	client.triggerOnEvent(history.Token{ Type: history.EntryEndOfSequence })
+	// tell the consumer (TUI) to reload the whole view from the new history
+	client.triggerOnEvent(history.Token{Type: history.TokenTypeResetChat})
 	return nil
+}
+
+
+
+func (client *Client) IsCompressing() bool {
+	client.mutex.Lock()
+	compressing := client.isCompressing
+	client.mutex.Unlock()
+	return compressing
 }
