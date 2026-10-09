@@ -30,6 +30,10 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case history.Token:
 		tui.handleTokenMsg(msg)
 		cmds = append(cmds, tui.waitForToken())
+
+	case tickMsg:
+		tui.tickFrame++
+		cmds = append(cmds, tui.tick())
 	}
 
 	// tea.PasteMsg (Bracketed Paste) läuft hier automatisch mit durch
@@ -149,7 +153,8 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 
 	// -2 list border, -2 outer padding (1 cell left + 1 cell right gutter)
 	rightWidth := max(msg.Width-listWidth-4, 10)
-	viewportHeight := msg.Height - footerHeight
+	// -2 for the blank spacer lines above and below the chat viewport
+	viewportHeight := msg.Height - footerHeight - 2
 	tui.rendererUser = tui.newRendererUser(rightWidth + 2)
 	tui.rendererAgent = tui.newRendererAgent(rightWidth + 2)
 	if !tui.ready {
@@ -183,8 +188,12 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token history.Token) {
 	switch token.Type {
-	case history.EntryEndOfSequence:
+	case history.TokenTypeEndOfSequence:
 		tui.mergeTokens()
+	case history.TokenTypeResetChat:
+		// the history was replaced (compressed/cleared); drop any in-flight
+		// tokens and rebuild the view from the client's authoritative history
+		tui.loadAgentHistory()
 	default:
 		if token.Type != history.EntryTypeReasoning || tui.showReasoning {
 			tui.tokens = append(tui.tokens, token)

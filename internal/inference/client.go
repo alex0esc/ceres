@@ -46,6 +46,7 @@ type Client struct {
     CompressionThreshold int64
 	NumMessagesToKeep int
     CompressionPrompt string
+    isCompressing bool
 }
 
 
@@ -110,7 +111,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			client.History.Push(call)
 			fullAnswer.Push(call.Copy())
 			client.triggerOnEvent(call.Copy())
-			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+			client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 
 			tool, ok := client.tools[v.Name]
 
@@ -135,7 +136,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			client.History.Push(resultEntry)
 			fullAnswer.Push(resultEntry.Copy())
 			client.triggerOnEvent(resultEntry.Copy())
-			client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+			client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 
 		}
 	}
@@ -184,7 +185,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			Model:        client.modelName,
 			Instructions: openai.String(client.SystemPrompt),
 			Input: responses.ResponseNewParamsInputUnion{
-				OfInputItemList: client.buildRequestInput(),
+				OfInputItemList: entriesToItems(client.History.Entries),
 			},
 			Reasoning: responses.ReasoningParam{
 				Effort: client.ReasoningEffort,
@@ -222,7 +223,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 
 			case responses.ResponseOutputItemAddedEvent:
 				if _, ok := e.Item.AsAny().(responses.ResponseOutputMessage); ok || e.Item.Type == "message" {
-					token := history.Token{Type: history.EntryEndOfSequence}
+					token := history.Token{Type: history.TokenTypeEndOfSequence}
 					client.partialAnswer = append(client.partialAnswer, token)
 					client.triggerOnEvent(token)
 				}
@@ -234,7 +235,7 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 			}
 		}
 
-		client.triggerOnEvent(history.Token{Type: history.EntryEndOfSequence})
+		client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 
 		if errors.Is(stream.Err(), context.Canceled) {
 			var reason strings.Builder

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -40,8 +41,12 @@ type AgentConfig struct {
 // greater than 1, multiple agents are returned, named "<name>-1" .. "<name>-n".
 func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cronLib *cron.Cron) ([]*Agent, error) {
 	var cfg AgentConfig
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	md, err := toml.DecodeFile(path, &cfg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode agent config %q: %w", path, err)
+	}
+	if missing := missingRequiredKeys(md); len(missing) > 0 {
+		return nil, fmt.Errorf("agent config %q is missing required field(s): %s", path, strings.Join(missing, ", "))
 	}
 	if cfg.Name == "" {
 		return nil, fmt.Errorf("invalid agent config %q: missing name", path)
@@ -99,6 +104,33 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 	return agents, nil
 }
 
+// missingRequiredKeys returns the top-level toml keys that are declared on the
+// config struct but absent from the decoded file. Fields tagged with omitempty
+// or "-" are treated as optional. Presence is checked, not the value, so a
+// field explicitly set to its zero value (e.g. quantity = 0) still counts.
+func missingRequiredKeys(md toml.MetaData) []string {
+	present := make(map[string]bool)
+	for _, key := range md.Keys() {
+		if len(key) == 1 {
+			present[key[0]] = true
+		}
+	}
+
+	t := reflect.TypeFor[AgentConfig]()
+	var missing []string
+	for field := range t.Fields() {
+		tag := field.Tag.Get("toml")
+		if tag == "" || tag == "-" || strings.Contains(tag, "omitempty") {
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		if !present[name] {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
 // LoadAgentsFromDir reads every .toml file in the given directory and loads
 // each one as an Agent (or several, if quantity > 1), wiring it up against
 // the provided endpoints.
@@ -134,8 +166,7 @@ func LoadAgentsFromDir(endpoints map[string]inference.Endpoint, cronLib *cron.Cr
 }
 
 // CreateDefaultAgentFile creates a main agent configuration file if does not exist
-func ensureOneAgentFile(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create agents directory: %w", err)
 	}
 	entries, err := os.ReadDir(dir)
@@ -165,7 +196,8 @@ func ensureOneAgentFile(dir string) error {
 		MaxToolIterations:    30,
 		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
-		CompressionPrompt:    "Your task is to summarize the current chat. Make it precise and don't leave anything important out.",
+		CompressionPrompt:    "This is a message injected by the system, your task is to compress the current chat. " +
+							  "Dont ask any question, do the summary in this turn and keep everything that is relevant.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)
