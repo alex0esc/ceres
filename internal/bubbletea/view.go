@@ -140,7 +140,7 @@ func (tui *Tui) getInfoTextString() string {
 
 	statusSeg := infoStyle.Render(status)
 	barSeg := infoStyle.Render(progressBar(used, threshold, 20) + " " + formatK(used))
-	agent := infoStyle.Copy().Bold(true).Render(tui.selectedAgent.Name())
+	agent := infoStyle.Bold(true).Render(tui.selectedAgent.Name())
 
 	text := agent + sep + barSeg + sep + statusSeg
 
