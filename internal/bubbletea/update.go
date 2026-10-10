@@ -2,7 +2,9 @@ package bubbletea
 
 import (
 	"log"
+	"strings"
 
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/alex0esc/ceres/internal/app"
@@ -42,6 +44,12 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if tui.focus == focusInput {
+		if cmd := tui.refreshAutocomplete(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
 	var cmd tea.Cmd
 	tui.viewport, cmd = tui.viewport.Update(msg)
 	if cmd != nil {
@@ -59,7 +67,25 @@ func (tui *Tui) handleKeyMsg(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 			tui.selectedAgent.Client.ClearOnEvent()
 		}
 		return tea.Quit, true
+	}
 
+	// while the command popup is open the arrow keys drive it and tab accepts the
+	// highlighted command instead of switching focus.
+	if tui.focus == focusInput && tui.autocompleteActive {
+		switch msg.String() {
+		case "down":
+			tui.autocomplete.CursorDown()
+			return nil, true
+		case "up":
+			tui.autocomplete.CursorUp()
+			return nil, true
+		case "tab":
+			tui.acceptAutocomplete()
+			return nil, true
+		}
+	}
+
+	switch msg.String() {
 	case "tab":
 		return tui.toggleFocus(), true
 
@@ -107,6 +133,11 @@ func (tui *Tui) submitMessage() {
 		return
 	}
 
+	// block sending an unknown slash command; arguments are not restricted.
+	if strings.HasPrefix(strings.TrimSpace(input), "/") && !command.IsValid(input) {
+		return
+	}
+
 	agnt := tui.selectedAgent
 	if agnt != nil {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
@@ -127,6 +158,8 @@ func (tui *Tui) submitMessage() {
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.textarea.Reset()
+	tui.autocompleteTyping = false
+	tui.autocompletePrefix = ""
 	tui.viewport.GotoBottom()
 }
 
@@ -153,15 +186,13 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 
 	// -2 list border, -2 outer padding (1 cell left + 1 cell right gutter)
 	rightWidth := max(msg.Width-listWidth-4, 10)
-	// -2 for the blank spacer lines above and below the chat viewport
-	viewportHeight := msg.Height - footerHeight - 2
 	tui.rendererUser = tui.newRendererUser(rightWidth + 2)
 	tui.rendererAgent = tui.newRendererAgent(rightWidth + 2)
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(
 			viewport.WithWidth(rightWidth),
-			viewport.WithHeight(viewportHeight),
+			viewport.WithHeight(max(msg.Height-footerHeight-2, 1)),
 		)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
@@ -175,14 +206,99 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 		tui.viewport.KeyMap.Right.SetEnabled(false)
 		tui.ready = true
 	} else {
-		tui.viewport.SetWidth(rightWidth)
-		tui.viewport.SetHeight(viewportHeight)
 		tui.loadAgentHistory()
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
-	tui.textarea.SetWidth(rightWidth - 2)
+	tui.applyLayout()
 	tui.viewport.SetContent(tui.getContentString())
+}
+
+// sizes the viewport, text area and autocomplete popup so the input box (and its
+// border) grows upward by the popup height while the chat viewport shrinks to fit.
+func (tui *Tui) applyLayout() {
+	rightWidth := max(tui.width-listWidth-4, 10)
+	inner := rightWidth - 2
+
+	autoHeight := 0
+	listHeight := 0
+	if tui.autocompleteActive {
+		listHeight = tui.autocompleteHeight
+		autoHeight = listHeight + autoCompleteGap
+	}
+
+	// -2 blank spacer lines above/below the chat viewport
+	viewportHeight := max(tui.height-(footerHeight+autoHeight)-2, 1)
+
+	tui.viewport.SetWidth(rightWidth)
+	tui.viewport.SetHeight(viewportHeight)
+	tui.textarea.SetWidth(inner)
+	tui.autocomplete.SetSize(inner, listHeight)
+}
+
+// rebuilds the command popup from the current text area value. It is shown only
+// while typing a bare slash command (no arguments yet). The list is only rebuilt
+// when the typed prefix changes, so navigating with the arrow keys is not reset
+// by the periodic tick that also flows through Update.
+func (tui *Tui) refreshAutocomplete() tea.Cmd {
+	var cmd tea.Cmd
+
+	value := tui.textarea.Value()
+	trimmed := strings.TrimLeft(value, " \t\n")
+	typing := strings.HasPrefix(trimmed, "/") && !strings.ContainsAny(trimmed, " \n\t")
+	prefix := ""
+	if typing {
+		prefix = strings.ToLower(strings.TrimPrefix(trimmed, "/"))
+	}
+
+	if typing == tui.autocompleteTyping && prefix == tui.autocompletePrefix {
+		return nil
+	}
+	tui.autocompleteTyping = typing
+	tui.autocompletePrefix = prefix
+
+	var items []list.Item
+	if typing {
+		var matched []command.Command
+		pad := 0
+		for _, c := range command.All() {
+			if strings.HasPrefix(strings.ToLower(c.Name), prefix) {
+				matched = append(matched, c)
+				pad = max(pad, len(c.Name))
+			}
+		}
+		for _, c := range matched {
+			items = append(items, commandItem{cmd: c, pad: pad})
+		}
+	}
+
+	active := len(items) > 0
+	newHeight := 0
+	if active {
+		cmd = tui.autocomplete.SetItems(items)
+		tui.autocomplete.Select(0)
+		newHeight = min(len(items), maxAutoItems)
+	}
+
+	if active != tui.autocompleteActive || newHeight != tui.autocompleteHeight {
+		tui.autocompleteActive = active
+		tui.autocompleteHeight = newHeight
+		tui.applyLayout()
+	}
+	return cmd
+}
+
+// writes the highlighted command into the text area and closes the popup.
+func (tui *Tui) acceptAutocomplete() {
+	if item, ok := tui.autocomplete.SelectedItem().(commandItem); ok {
+		tui.textarea.SetValue("/" + item.cmd.Name + " ")
+		tui.textarea.CursorEnd()
+	}
+	tui.autocompleteActive = false
+	tui.autocompleteHeight = 0
+	tui.autocompleteTyping = false
+	tui.autocompletePrefix = ""
+	tui.applyLayout()
 }
 
 // handleChunkMsg adds a msg to the current chat

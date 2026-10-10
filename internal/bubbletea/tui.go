@@ -28,6 +28,13 @@ type Tui struct {
 	list       list.Model
 	ready      bool
 
+	// slash-command autocomplete, rendered inside the input box border
+	autocomplete       list.Model
+	autocompleteActive bool
+	autocompleteHeight int
+	autocompleteTyping bool
+	autocompletePrefix string
+
 	width      int
 	height     int
 	focus      focusState

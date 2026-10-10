@@ -9,8 +9,8 @@ import (
 
 func NewInterruptCommand() command.Command {
 	return command.Command{
-		Name:        "itr",
-		Description: "Interrupt the selected agent.",
+		Name:        "interrupt",
+		Description: "Interrupt the running task of the selected agent.",
 		Handler:     handleInterrupt,
 	}
 }

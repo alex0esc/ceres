@@ -12,7 +12,7 @@ import (
 
 func NewCompressCommand() command.Command {
 	return command.Command{
-		Name:        "cmp",
+		Name:        "compress",
 		Description: "Compress the chat history of the selected agent.",
 		Handler:     handleCompress,
 	}

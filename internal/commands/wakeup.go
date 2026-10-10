@@ -10,11 +10,11 @@ import (
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
-const wakeUsage = "Usage: `/wake list` or `/wake run <name>`"
+const wakeUsage = "Usage: `/wakeup list` or `/wakeup run <name>`"
 
 func NewWakeupCommand() command.Command {
 	return command.Command{
-		Name:        "wake",
+		Name:        "wakeup",
 		Description: "Manage registered wakeups for the specific agent.",
 		Handler:     handleWakeup,
 	}
@@ -89,7 +89,7 @@ func wakeList(mgr *wakeup.Manager) string {
 
 func wakeRun(mgr *wakeup.Manager, args []string) string {
 	if len(args) < 1 {
-		return "Please specify a wakeup name. Usage: `/wake run <name>`"
+		return "Please specify a wakeup name. Usage: `/wakeup run <name>`"
 	}
 
 	name := args[0]

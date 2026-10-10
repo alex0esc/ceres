@@ -12,7 +12,7 @@ import (
 
 func NewClearCommand() command.Command {
 	return command.Command{
-		Name:        "clr",
+		Name:        "clear",
 		Description: "Clear the chat history of the selected agent.",
 		Handler:     handleClear,
 	}

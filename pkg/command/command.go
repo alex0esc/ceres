@@ -56,6 +56,27 @@ func All() []Command {
 
 
 
+// IsValid reports whether cmdText is a slash command whose name is registered.
+// Only the command name is checked; the arguments are not validated here, so any
+// argument text is allowed.
+func IsValid(cmdText string) bool {
+	cmdText = strings.TrimSpace(cmdText)
+	if !strings.HasPrefix(cmdText, "/") {
+		return false
+	}
+	rest := strings.TrimPrefix(cmdText, "/")
+	name := rest
+	if i := strings.IndexAny(rest, " \t\n"); i >= 0 {
+		name = rest[:i]
+	}
+	if name == "" {
+		return false
+	}
+	_, ok := registry[strings.ToLower(name)]
+	return ok
+}
+
+
 // CheckCommand parses cmdText and, if it's a command, runs it.
 // Returns true if the text was handled as a command.
 func CheckCommand(agent handles.AgentHandle, cmdText string) (bool, string) {
