@@ -10,31 +10,48 @@ import (
 	"github.com/alex0esc/ceres/pkg/handles"
 )
 
-const wakeUsage = "Usage: `/wakeup list` or `/wakeup run <name>`"
-
+// NewWakeupCommand returns the /wakeup command together with its subcommands.
+// Registering this single command registers the whole tree; the subcommands are
+// embedded and are not separate top-level commands.
 func NewWakeupCommand() command.Command {
 	return command.Command{
 		Name:        "wakeup",
 		Description: "Manage registered wakeups for the specific agent.",
-		Handler:     handleWakeup,
+		Subcommands: []command.Command{
+			{
+				Name:        "list",
+				Description: "List all registered wakeups.",
+				Handler:     handleWakeupList,
+			},
+			{
+				Name:        "run",
+				Description: "Run a registered wakeup by name.",
+				Handler:     handleWakeupRun,
+			},
+		},
 	}
 }
 
-func handleWakeup(agent handles.AgentHandle, args []string) string {
-	if len(args) == 0 {
-		return wakeUsage
+func handleWakeupList(agent handles.AgentHandle, args []string) string {
+	if len(args) > 0 {
+		return command.NoArgs("wakeup list")
+	}
+	return wakeList(agent.WakeupManager())
+}
+
+func handleWakeupRun(agent handles.AgentHandle, args []string) string {
+	if len(args) < 1 {
+		return command.NeedArgs("wakeup run", "<name>")
 	}
 
+	name := args[0]
 	mgr := agent.WakeupManager()
 
-	switch strings.ToLower(args[0]) {
-	case "list":
-		return wakeList(mgr)
-	case "run":
-		return wakeRun(mgr, args[1:])
-	default:
-		return "Unknown subcommand. " + wakeUsage
+	if !mgr.Run(name) {
+		return fmt.Sprintf("No wakeup named '%s' is registered.\nTip: run /wakeup list to see all wakeups.", name)
 	}
+
+	return fmt.Sprintf("*Queued wakeup '%s' for execution.*", name)
 }
 
 func wakeList(mgr *wakeup.Manager) string {
@@ -85,20 +102,6 @@ func wakeList(mgr *wakeup.Manager) string {
 	}
 
 	return b.String()
-}
-
-func wakeRun(mgr *wakeup.Manager, args []string) string {
-	if len(args) < 1 {
-		return "Please specify a wakeup name. Usage: `/wakeup run <name>`"
-	}
-
-	name := args[0]
-
-	if !mgr.Run(name) {
-		return fmt.Sprintf("Wakeup with name '%s' does not exist.", name)
-	}
-
-	return fmt.Sprintf("*Queued wakeup '%s' for execution.*", name)
 }
 
 

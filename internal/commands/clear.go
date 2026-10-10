@@ -20,7 +20,7 @@ func NewClearCommand() command.Command {
 
 func handleClear(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The clear command does not take arguments!"
+		return command.NoArgs("clear")
 	}
 
 	task := task.TaskClear(time.Minute)

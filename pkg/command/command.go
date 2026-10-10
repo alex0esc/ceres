@@ -1,4 +1,3 @@
-
 package command
 
 import (
@@ -15,24 +14,56 @@ import (
 // CommandHandler runs a command and returns the response text.
 type CommandHandler func(agent handles.AgentHandle, args []string) string
 
-// Command is a single slash command.
+// Command is a single slash command. A command may carry Subcommands, which are
+// themselves Commands. A command that has Subcommands is only a grouping node:
+// it is never runnable on its own and must be invoked together with one of its
+// subcommands. A command without Subcommands is a leaf and runs its Handler,
+// receiving the remaining tokens as free-form arguments.
 type Command struct {
 	Name        string
 	Description string
 	Handler     CommandHandler
+	Subcommands []Command
 }
 
 // Commands is the global registry, keyed by name (without "/").
 var registry = map[string]Command{}
 
 
-// RegisterCommand adds a command to the global registry.
+// Register adds a command to the global registry. A command that has subcommands
+// but no own Handler gets an automatically generated Handler that dispatches to
+// the matching subcommand, so callers (TUI, platforms) only ever deal with the
+// top-level command's Handler and never need to know about the subcommand tree.
 func Register(cmd Command) {
 	_, ok := registry[cmd.Name]
 	if ok {
 		log.Fatalf("command %s already registered", cmd.Name)
 	}
+	if cmd.Handler == nil && len(cmd.Subcommands) > 0 {
+		cmd.Handler = subcommandHandler(cmd)
+	}
 	registry[cmd.Name] = cmd
+}
+
+// subcommandHandler builds a Handler for a parent command that resolves the
+// first argument to one of its subcommands and runs that subcommand's Handler
+// with the remaining arguments. Wrong or missing subcommands return the uniform
+// SubcommandUsage message.
+func subcommandHandler(parent Command) CommandHandler {
+	usage := SubcommandUsage(parent.Name, parent.Subcommands)
+	return func(agent handles.AgentHandle, args []string) string {
+		if len(args) == 0 {
+			return usage
+		}
+		child, ok := parent.Subcommand(args[0])
+		if !ok {
+			return usage
+		}
+		if child.Handler == nil {
+			return fmt.Sprintf("The /%s %s subcommand cannot be run directly.\n%s", parent.Name, child.Name, usage)
+		}
+		return child.Handler(agent, args[1:])
+	}
 }
 
 
@@ -56,24 +87,22 @@ func All() []Command {
 
 
 
-// IsValid reports whether cmdText is a slash command whose name is registered.
-// Only the command name is checked; the arguments are not validated here, so any
-// argument text is allowed.
-func IsValid(cmdText string) bool {
-	cmdText = strings.TrimSpace(cmdText)
-	if !strings.HasPrefix(cmdText, "/") {
-		return false
+// Lookup returns the top-level command with the given name (case-insensitive).
+func Lookup(name string) (Command, bool) {
+	c, ok := registry[strings.ToLower(name)]
+	return c, ok
+}
+
+// Subcommand returns the direct subcommand of c with the given name
+// (case-insensitive).
+func (c Command) Subcommand(name string) (Command, bool) {
+	name = strings.ToLower(name)
+	for _, s := range c.Subcommands {
+		if strings.ToLower(s.Name) == name {
+			return s, true
+		}
 	}
-	rest := strings.TrimPrefix(cmdText, "/")
-	name := rest
-	if i := strings.IndexAny(rest, " \t\n"); i >= 0 {
-		name = rest[:i]
-	}
-	if name == "" {
-		return false
-	}
-	_, ok := registry[strings.ToLower(name)]
-	return ok
+	return Command{}, false
 }
 
 
@@ -89,7 +118,7 @@ func CheckCommand(agent handles.AgentHandle, cmdText string) (bool, string) {
 	trimmed := strings.TrimPrefix(cmdText, "/")
 	fields, err := splitArgs(trimmed)
 	if err != nil {
-		return true, fmt.Sprintf("Invalid command: %v\n", err)
+		return true, fmt.Sprintf("Invalid command: %v", err)
 	}
 	if len(fields) == 0 {
 		// only "/" was entered without a command name
@@ -100,7 +129,7 @@ func CheckCommand(agent handles.AgentHandle, cmdText string) (bool, string) {
 
 	cmd, ok := registry[name]
 	if !ok {
-		return true, fmt.Sprintf("Unknown command: /%s\n", name)
+		return true, fmt.Sprintf("Unknown command: /%s.\nRun /help to see all available commands.", name)
 	}
 	return true, cmd.Handler(agent, args)
 }

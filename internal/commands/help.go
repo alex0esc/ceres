@@ -20,14 +20,16 @@ func NewHelpCommand() command.Command {
 
 func handleHelp(agent handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The help command does not take arguments!"
+		return command.NoArgs("help")
 	}
-
 
 	var b strings.Builder
 	b.WriteString("## Available Commands\n\n")
 	for _, cmd := range command.All() {
 		fmt.Fprintf(&b, "- **/%s** — %s\n", cmd.Name, cmd.Description)
+		for _, sub := range cmd.Subcommands {
+			fmt.Fprintf(&b, "  - **/%s %s** — %s\n", cmd.Name, sub.Name, sub.Description)
+		}
 	}
 
 	return b.String()

@@ -20,7 +20,7 @@ func NewCompressCommand() command.Command {
 
 func handleCompress(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The compress command does not take arguments!"
+		return command.NoArgs("compress")
 	}
 
 	task := task.TaskCompression(30 * time.Minute)

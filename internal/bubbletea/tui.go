@@ -29,11 +29,7 @@ type Tui struct {
 	ready      bool
 
 	// slash-command autocomplete, rendered inside the input box border
-	autocomplete       list.Model
-	autocompleteActive bool
-	autocompleteHeight int
-	autocompleteTyping bool
-	autocompletePrefix string
+	ac commandPopup
 
 	width      int
 	height     int

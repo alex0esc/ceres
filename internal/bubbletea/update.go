@@ -2,9 +2,7 @@ package bubbletea
 
 import (
 	"log"
-	"strings"
 
-	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/alex0esc/ceres/internal/app"
@@ -71,13 +69,13 @@ func (tui *Tui) handleKeyMsg(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 
 	// while the command popup is open the arrow keys drive it and tab accepts the
 	// highlighted command instead of switching focus.
-	if tui.focus == focusInput && tui.autocompleteActive {
+	if tui.focus == focusInput && tui.ac.visible() {
 		switch msg.String() {
 		case "down":
-			tui.autocomplete.CursorDown()
+			tui.ac.cursorDown()
 			return nil, true
 		case "up":
-			tui.autocomplete.CursorUp()
+			tui.ac.cursorUp()
 			return nil, true
 		case "tab":
 			tui.acceptAutocomplete()
@@ -133,11 +131,6 @@ func (tui *Tui) submitMessage() {
 		return
 	}
 
-	// block sending an unknown slash command; arguments are not restricted.
-	if strings.HasPrefix(strings.TrimSpace(input), "/") && !command.IsValid(input) {
-		return
-	}
-
 	agnt := tui.selectedAgent
 	if agnt != nil {
 		cmd, cmd_text := command.CheckCommand(tui.selectedAgent, input)
@@ -158,8 +151,8 @@ func (tui *Tui) submitMessage() {
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.textarea.Reset()
-	tui.autocompleteTyping = false
-	tui.autocompletePrefix = ""
+	tui.ac.reset()
+	tui.applyLayout()
 	tui.viewport.GotoBottom()
 }
 
@@ -222,8 +215,8 @@ func (tui *Tui) applyLayout() {
 
 	autoHeight := 0
 	listHeight := 0
-	if tui.autocompleteActive {
-		listHeight = tui.autocompleteHeight
+	if tui.ac.visible() {
+		listHeight = tui.ac.height()
 		autoHeight = listHeight + autoCompleteGap
 	}
 
@@ -233,71 +226,25 @@ func (tui *Tui) applyLayout() {
 	tui.viewport.SetWidth(rightWidth)
 	tui.viewport.SetHeight(viewportHeight)
 	tui.textarea.SetWidth(inner)
-	tui.autocomplete.SetSize(inner, listHeight)
+	tui.ac.setSize(inner, listHeight)
 }
 
-// rebuilds the command popup from the current text area value. It is shown only
-// while typing a bare slash command (no arguments yet). The list is only rebuilt
-// when the typed prefix changes, so navigating with the arrow keys is not reset
-// by the periodic tick that also flows through Update.
+// refreshAutocomplete recomputes the command popup for the current text and, if
+// its geometry changed, re-runs the layout so the input box grows/shrinks.
 func (tui *Tui) refreshAutocomplete() tea.Cmd {
-	var cmd tea.Cmd
-
-	value := tui.textarea.Value()
-	trimmed := strings.TrimLeft(value, " \t\n")
-	typing := strings.HasPrefix(trimmed, "/") && !strings.ContainsAny(trimmed, " \n\t")
-	prefix := ""
-	if typing {
-		prefix = strings.ToLower(strings.TrimPrefix(trimmed, "/"))
-	}
-
-	if typing == tui.autocompleteTyping && prefix == tui.autocompletePrefix {
-		return nil
-	}
-	tui.autocompleteTyping = typing
-	tui.autocompletePrefix = prefix
-
-	var items []list.Item
-	if typing {
-		var matched []command.Command
-		pad := 0
-		for _, c := range command.All() {
-			if strings.HasPrefix(strings.ToLower(c.Name), prefix) {
-				matched = append(matched, c)
-				pad = max(pad, len(c.Name))
-			}
-		}
-		for _, c := range matched {
-			items = append(items, commandItem{cmd: c, pad: pad})
-		}
-	}
-
-	active := len(items) > 0
-	newHeight := 0
-	if active {
-		cmd = tui.autocomplete.SetItems(items)
-		tui.autocomplete.Select(0)
-		newHeight = min(len(items), maxAutoItems)
-	}
-
-	if active != tui.autocompleteActive || newHeight != tui.autocompleteHeight {
-		tui.autocompleteActive = active
-		tui.autocompleteHeight = newHeight
+	changed, cmd := tui.ac.update(tui.textarea.Value())
+	if changed {
 		tui.applyLayout()
 	}
 	return cmd
 }
 
-// writes the highlighted command into the text area and closes the popup.
+// acceptAutocomplete writes the highlighted command into the text area and
+// closes the popup.
 func (tui *Tui) acceptAutocomplete() {
-	if item, ok := tui.autocomplete.SelectedItem().(commandItem); ok {
-		tui.textarea.SetValue("/" + item.cmd.Name + " ")
-		tui.textarea.CursorEnd()
-	}
-	tui.autocompleteActive = false
-	tui.autocompleteHeight = 0
-	tui.autocompleteTyping = false
-	tui.autocompletePrefix = ""
+	tui.textarea.SetValue(tui.ac.accept(tui.textarea.Value()))
+	tui.textarea.CursorEnd()
+	tui.ac.reset()
 	tui.applyLayout()
 }
 

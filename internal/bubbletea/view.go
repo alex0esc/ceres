@@ -56,10 +56,10 @@ func (tui *Tui) content() string {
 	// the autocomplete popup shares the input box border: stacking it above the
 	// text area makes that single border grow upward instead of adding a second box.
 	inputContent := tui.textarea.View()
-	if tui.autocompleteActive {
+	if tui.ac.visible() {
 		inputContent = lipgloss.JoinVertical(
 			lipgloss.Left,
-			tui.autocomplete.View(),
+			tui.ac.list.View(),
 			"",
 			tui.textarea.View(),
 		)
