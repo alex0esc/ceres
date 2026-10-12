@@ -9,15 +9,15 @@ import (
 
 func NewInterruptCommand() command.Command {
 	return command.Command{
-		Name:        "itr",
-		Description: "Interrupt the selected agent.",
+		Name:        "interrupt",
+		Description: "Interrupt the running task of the selected agent.",
 		Handler:     handleInterrupt,
 	}
 }
 
 func handleInterrupt(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The interrupt command does not take arguments!"
+		return command.NoArgs("interrupt")
 	}
 	agnt.(*agent.Agent).Client.Interrupt()
 	return "*Agent has been interrupted.*"

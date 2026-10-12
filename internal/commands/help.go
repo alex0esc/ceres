@@ -20,9 +20,8 @@ func NewHelpCommand() command.Command {
 
 func handleHelp(agent handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The help command does not take arguments!"
+		return command.NoArgs("help")
 	}
-
 
 	var b strings.Builder
 	b.WriteString("## Available Commands\n\n")

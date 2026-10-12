@@ -28,6 +28,9 @@ type Tui struct {
 	list       list.Model
 	ready      bool
 
+	// slash-command autocomplete, rendered inside the input box border
+	ac commandPopup
+
 	width      int
 	height     int
 	focus      focusState

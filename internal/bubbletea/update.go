@@ -42,6 +42,12 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if tui.focus == focusInput {
+		if cmd := tui.refreshAutocomplete(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
 	var cmd tea.Cmd
 	tui.viewport, cmd = tui.viewport.Update(msg)
 	if cmd != nil {
@@ -59,7 +65,25 @@ func (tui *Tui) handleKeyMsg(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 			tui.selectedAgent.Client.ClearOnEvent()
 		}
 		return tea.Quit, true
+	}
 
+	// while the command popup is open the arrow keys drive it and tab accepts the
+	// highlighted command instead of switching focus.
+	if tui.focus == focusInput && tui.ac.visible() {
+		switch msg.String() {
+		case "down":
+			tui.ac.cursorDown()
+			return nil, true
+		case "up":
+			tui.ac.cursorUp()
+			return nil, true
+		case "tab":
+			tui.acceptAutocomplete()
+			return nil, true
+		}
+	}
+
+	switch msg.String() {
 	case "tab":
 		return tui.toggleFocus(), true
 
@@ -127,6 +151,8 @@ func (tui *Tui) submitMessage() {
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.textarea.Reset()
+	tui.ac.reset()
+	tui.applyLayout()
 	tui.viewport.GotoBottom()
 }
 
@@ -153,15 +179,13 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 
 	// -2 list border, -2 outer padding (1 cell left + 1 cell right gutter)
 	rightWidth := max(msg.Width-listWidth-4, 10)
-	// -2 for the blank spacer lines above and below the chat viewport
-	viewportHeight := msg.Height - footerHeight - 2
 	tui.rendererUser = tui.newRendererUser(rightWidth + 2)
 	tui.rendererAgent = tui.newRendererAgent(rightWidth + 2)
 	if !tui.ready {
 		tui.applyListSelection()
 		tui.viewport = viewport.New(
 			viewport.WithWidth(rightWidth),
-			viewport.WithHeight(viewportHeight),
+			viewport.WithHeight(max(msg.Height-footerHeight-2, 1)),
 		)
 		tui.viewport.SetContent(tui.getContentString())
 		tui.viewport.MouseWheelDelta = 5
@@ -175,14 +199,53 @@ func (tui *Tui) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 		tui.viewport.KeyMap.Right.SetEnabled(false)
 		tui.ready = true
 	} else {
-		tui.viewport.SetWidth(rightWidth)
-		tui.viewport.SetHeight(viewportHeight)
 		tui.loadAgentHistory()
 	}
 	// -2 wegen Border oben/unten der Liste
 	tui.list.SetSize(listWidth, msg.Height-2)
-	tui.textarea.SetWidth(rightWidth - 2)
+	tui.applyLayout()
 	tui.viewport.SetContent(tui.getContentString())
+}
+
+// sizes the viewport, text area and autocomplete popup so the input box (and its
+// border) grows upward by the popup height while the chat viewport shrinks to fit.
+func (tui *Tui) applyLayout() {
+	rightWidth := max(tui.width-listWidth-4, 10)
+	inner := rightWidth - 2
+
+	autoHeight := 0
+	listHeight := 0
+	if tui.ac.visible() {
+		listHeight = tui.ac.height()
+		autoHeight = listHeight + autoCompleteGap
+	}
+
+	// -2 blank spacer lines above/below the chat viewport
+	viewportHeight := max(tui.height-(footerHeight+autoHeight)-2, 1)
+
+	tui.viewport.SetWidth(rightWidth)
+	tui.viewport.SetHeight(viewportHeight)
+	tui.textarea.SetWidth(inner)
+	tui.ac.setSize(inner, listHeight)
+}
+
+// refreshAutocomplete recomputes the command popup for the current text and, if
+// its geometry changed, re-runs the layout so the input box grows/shrinks.
+func (tui *Tui) refreshAutocomplete() tea.Cmd {
+	changed, cmd := tui.ac.update(tui.textarea.Value())
+	if changed {
+		tui.applyLayout()
+	}
+	return cmd
+}
+
+// acceptAutocomplete writes the highlighted command into the text area and
+// closes the popup.
+func (tui *Tui) acceptAutocomplete() {
+	tui.textarea.SetValue(tui.ac.accept(tui.textarea.Value()))
+	tui.textarea.CursorEnd()
+	tui.ac.reset()
+	tui.applyLayout()
 }
 
 // handleChunkMsg adds a msg to the current chat

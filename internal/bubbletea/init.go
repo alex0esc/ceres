@@ -24,8 +24,9 @@ func (item listItem) Title() string       { return item.botName }
 func (item listItem) Description() string { return item.botDesc }
 
 const (
-	listWidth    = 40
-	footerHeight = 7 // Inputbox: border top + bottom (4 + 3)
+	listWidth      = 40
+	footerHeight   = 7 // Inputbox: border top + bottom (4 + 3)
+	textareaHeight = 4 // fixed inner height of the text area
 )
 
 func newListDelegate() list.ItemDelegate {
@@ -97,9 +98,10 @@ func initialTui() (*Tui, error) {
 	timeout := config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", time.Minute * 60)
 
 	return &Tui{
-		textarea: newTextArea(),
-		list:      newList(app.GetAgentList()),
-		focus:     focusInput,
+		textarea:     newTextArea(),
+		list:         newList(app.GetAgentList()),
+		ac:           newCommandPopup(),
+		focus:        focusInput,
 		inputChan: make(chan history.Token, 1024),
 		selectedAgent: nil,
 		messageTimeout: timeout,

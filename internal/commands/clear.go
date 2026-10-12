@@ -12,7 +12,7 @@ import (
 
 func NewClearCommand() command.Command {
 	return command.Command{
-		Name:        "clr",
+		Name:        "clear",
 		Description: "Clear the chat history of the selected agent.",
 		Handler:     handleClear,
 	}
@@ -20,7 +20,7 @@ func NewClearCommand() command.Command {
 
 func handleClear(agnt handles.AgentHandle, args []string) string {
 	if len(args) > 0 {
-		return "The clear command does not take arguments!"
+		return command.NoArgs("clear")
 	}
 
 	task := task.TaskClear(time.Minute)
