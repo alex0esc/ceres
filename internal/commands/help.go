@@ -27,9 +27,6 @@ func handleHelp(agent handles.AgentHandle, args []string) string {
 	b.WriteString("## Available Commands\n\n")
 	for _, cmd := range command.All() {
 		fmt.Fprintf(&b, "- **/%s** — %s\n", cmd.Name, cmd.Description)
-		for _, sub := range cmd.Subcommands {
-			fmt.Fprintf(&b, "  - **/%s %s** — %s\n", cmd.Name, sub.Name, sub.Description)
-		}
 	}
 
 	return b.String()
