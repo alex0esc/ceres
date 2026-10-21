@@ -29,6 +29,7 @@ type AgentConfig struct {
 	Quantity             int            `toml:"quantity"`              // Number of agent instances to create
 	Subagent             bool           `toml:"subagent"`              // Whether this is a subagent
 	MaxToolIterations    int            `toml:"max_tool_iterations"`   // Maximum tool call rounds per request
+	MaxToolResultChars   int            `toml:"max_tool_result_chars"` // Maximum size of a single tool result in characters
 	Tools                []string       `toml:"tools"`                 // List of tool names to register
 	SystemPrompt         string         `toml:"system_prompt"`         // System prompt (use <name> as placeholder)
 	CompressionThreshold int64          `toml:"compression_threshold"` // Token count threshold for history compression
@@ -72,6 +73,7 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 		client.SystemPrompt = strings.ReplaceAll(cfg.SystemPrompt, "<name>", name)
 		client.ReasoningEffort = responses.ReasoningEffort(cfg.ReasoningEffort)
 		client.MaxToolIterations = cfg.MaxToolIterations
+		client.MaxToolResultChars = cfg.MaxToolResultChars
 		client.NumMessagesToKeep = cfg.NumMessagesToKeep
 		client.CompressionThreshold = cfg.CompressionThreshold
 		client.CompressionPrompt = cfg.CompressionPrompt
@@ -193,7 +195,8 @@ func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); e
 		Endpoint:             "llama",
 		Quantity:             1,
 		Subagent:             false,
-		MaxToolIterations:    30,
+		MaxToolIterations:    100,
+		MaxToolResultChars:   100000,
 		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
 		CompressionPrompt:    "This is a message injected by the system, your task is to compress the current chat. " +
@@ -221,6 +224,7 @@ func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); e
 # System Prompt: The agent's system prompt (use <name> as placeholder for agent name)
 # Tools: List of tool names the agent can use
 # Max Tool Iterations: Maximum number of tool call rounds per request
+# Max Tool Result Chars: Maximum number of charcters a tool output can contain
 # Compression Threshold: Token count that triggers history compression
 # Num Messages To Keep: Messages to keep after compression
 # Compression Prompt: Prompt used when compressing history

@@ -36,6 +36,7 @@ type Client struct {
 	tools           map[string]tool.Tool
 	toolParams      []responses.ToolUnionParam
 	MaxToolIterations int
+	MaxToolResultChars int
 
 	// sync
     mutex           sync.Mutex
@@ -55,10 +56,12 @@ func NewClient(endpoint *Endpoint, modelName string) *Client {
 		modelName:         modelName,
 		ReasoningEffort:   responses.ReasoningEffortNone,
 		SystemPrompt:      "Your are Ceres a helpful AI assistant.",
-		MaxToolIterations: 30,
+		MaxToolIterations: 100,
+		MaxToolResultChars: 100000,
 		endpoint: endpoint,
 		CompressionThreshold: 200000,
-		CompressionPrompt: "Your task is to summerize the current chat. Make it precise and dont leave anything important out.",
+		CompressionPrompt: "This is a message injected by the system, your task is to compress the current chat. " +
+						   "Dont ask any question, do the summary in this turn and keep everything that is relevant.",
 		NumMessagesToKeep: 8,
 		tools: make(map[string]tool.Tool),
 	}
@@ -113,7 +116,7 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			client.triggerOnEvent(call.Copy())
 			client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
 
-			tool, ok := client.tools[v.Name]
+			t, ok := client.tools[v.Name]
 
 
 
@@ -121,12 +124,15 @@ func (client *Client) handleToolCalls(ctx context.Context, output []responses.Re
 			if !ok {
 				result = fmt.Sprintf(`{"error": "unknown tool %q"}`, v.Name)
 			} else {
-				out, err := tool.Handler()(ctx, v.Arguments, handle)
+				out, err := t.Handler()(ctx, v.Arguments, handle)
 				if err != nil {
 					result = fmt.Sprintf(`{"error": %q}`, err.Error())
+				} else if len_out := len(out); len_out > client.MaxToolResultChars {
+					result = fmt.Sprintf(`{"error": tool result is too large, max is %d, but was %d}`, client.MaxToolResultChars, len_out)
 				} else {
 					result = out
 				}
+
 			}
 
 			resultEntry := history.Entry{Type: history.EntryTypeToolResult, ToolResult: &history.ToolResult{
