@@ -34,7 +34,7 @@ func NewViewImageTool() ViewImageTool {
 
 	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second * 120)
 
-	var defSize int64 = 4096
+	var defSize int64 = 8192
 	maxSize := config.ReadEntry(cfg, "view_image.max_size_kb", defSize) * 1024
 
 	return ViewImageTool{

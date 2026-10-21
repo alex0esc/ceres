@@ -1,10 +1,10 @@
 package tools
 
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +18,6 @@ import (
 type FileReadTool struct {
 	containerName string
 	timeout       time.Duration
-	maxSize       int64
 }
 
 // NewFileReadTool constructs a FileReadTool, reading all relevant config
@@ -27,16 +26,11 @@ func NewFileReadTool() FileReadTool {
 	cfg := tool.GetToolConfig()
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-
 	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second*120)
-
-	var defSize int64 = 1024 * 40
-	maxSize := config.ReadEntry(cfg, "file_read.max_size_b", defSize)
 
 	return FileReadTool{
 		containerName: containerName,
 		timeout:       timeout,
-		maxSize:       maxSize,
 	}
 }
 
@@ -44,16 +38,12 @@ func (FileReadTool) Name() string {
 	return "file_read"
 }
 
-func (t FileReadTool) Description() string {
-	return fmt.Sprintf(
-		"Reads a file inside the sandbox container and returns its content. By default, each line is prefixed by "+
-			"its line number (format: \"<line_number>: <content>\"); use the line numbers to target specific lines "+
-			"with file-editing tools. Set 'line_numbers' to false to get the raw content without line numbers. "+
-			"Optionally provide 'start_line' and/or 'end_line' (1-based, inclusive) to only return a slice of the file "+
-			"instead of the full content; line numbers always refer to the position in the full file. "+
-			"Files larger than %d bytes are rejected.",
-		t.maxSize,
-	)
+func (FileReadTool) Description() string {
+	return "Reads a file inside the sandbox container and returns its content. By default, each line is prefixed by " +
+		"its line number (format: \"<line_number>: <content>\"); use the line numbers to target specific lines " +
+		"with file-editing tools. Set 'line_numbers' to false to get the raw content without line numbers. " +
+		"Optionally provide 'start_line' and/or 'end_line' (1-based, inclusive) to only return a slice of the file " +
+		"instead of the full content; line numbers always refer to the position in the full file."
 }
 
 func (FileReadTool) Parameters() map[string]any {
@@ -105,27 +95,6 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 
 		// Line numbers are on unless explicitly disabled (null/omitted = true).
 		withLineNumbers := args.LineNumbers == nil || *args.LineNumbers
-
-		// Check the file size before reading it fully, so an oversized or
-		// otherwise unusual file (huge log, device file, etc.) never gets
-		// pulled entirely into memory just to be rejected afterwards.
-		statCtx, statCancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
-		statCmd := fmt.Sprintf("stat -c %%s -- %s", shellQuote(args.Path))
-		statOut, statErr, statExit, err := runInContainer(statCtx, t.containerName, statCmd)
-		statCancel()
-		if err != nil {
-			return "", fmt.Errorf("file_read: failed to stat file in sandbox: %w", err)
-		}
-		if statExit != 0 {
-			return "", fmt.Errorf("file_read: stat exited with code %d: %s", statExit, strings.TrimSpace(statErr))
-		}
-		size, err := strconv.ParseInt(strings.TrimSpace(statOut), 10, 64)
-		if err != nil {
-			return "", fmt.Errorf("file_read: failed to parse file size %q: %w", strings.TrimSpace(statOut), err)
-		}
-		if size > t.maxSize {
-			return "", fmt.Errorf("file_read: file is %d bytes, which exceeds the configured limit of %d bytes", size, t.maxSize)
-		}
 
 		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()

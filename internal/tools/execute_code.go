@@ -19,7 +19,6 @@ import (
 type ExecuteCodeTool struct {
 	containerName string
 	timeout       time.Duration
-	maxOutput     int64
 }
 
 // NewExecuteCodeTool constructs an ExecuteCodeTool, reading all relevant
@@ -28,16 +27,11 @@ func NewExecuteCodeTool() ExecuteCodeTool {
 	cfg := tool.GetToolConfig()
 
 	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-
-	timeout := config.ReadEntry(cfg, "execute_code.timeout", time.Second * 180)
-
-	var defMaxOutput int64 = 1024 * 20
-	maxOutput := config.ReadEntry(cfg, "execute_code.max_output_b", defMaxOutput)
+	timeout := config.ReadEntry(cfg, "execute_code.timeout", time.Second*180)
 
 	return ExecuteCodeTool{
 		containerName: containerName,
 		timeout:       timeout,
-		maxOutput:     maxOutput,
 	}
 }
 
@@ -45,14 +39,10 @@ func (ExecuteCodeTool) Name() string {
 	return "execute_code"
 }
 
-func (t ExecuteCodeTool) Description() string {
-	return fmt.Sprintf(
-		"Executes a short Python 3 code snippet inside the sandbox container and returns stdout, stderr, and the exit code. " +
-			"Use this for on-demand calculations, quick data processing, or logic checks — not for long-running or interactive scripts. " +
-			"The snippet has no persistent state between calls (each execution is a fresh process); print() whatever result you need to see. " +
-			"Combined stdout+stderr output larger than %d bytes will be truncated.",
-		t.maxOutput,
-	)
+func (ExecuteCodeTool) Description() string {
+	return "Executes a short Python 3 code snippet inside the sandbox container and returns stdout, stderr, and the exit code. " +
+		"Use this for on-demand calculations, quick data processing, or logic checks — not for long-running or interactive scripts. " +
+		"The snippet has no persistent state between calls (each execution is a fresh process); print() whatever result you need to see."
 }
 
 func (ExecuteCodeTool) Parameters() map[string]any {
@@ -86,14 +76,14 @@ func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 		// No temp file is written to disk — python3 reads the script from stdin.
 		encoded := base64.StdEncoding.EncodeToString([]byte(args.Code))
 		runCmd := fmt.Sprintf("echo %s | base64 -d | python3 -", shellQuote(encoded))
+
 		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
 		stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, runCmd)
 		if err != nil {
 			return "", fmt.Errorf("execute_code: failed to execute code in sandbox: %w", err)
 		}
-		stdout = truncateOutput(stdout, t.maxOutput)
-		stderr = truncateOutput(stderr, t.maxOutput)
+
 		out := struct {
 			Stdout   string `json:"stdout"`
 			Stderr   string `json:"stderr"`
@@ -109,13 +99,4 @@ func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 		}
 		return string(result), nil
 	}
-}
-
-func truncateOutput(s string, maxBytes int64) string {
-	if maxBytes <= 0 || int64(len(s)) <= maxBytes {
-		return s
-	}
-	suffix := "\n... [truncated]"
-	cut := max(maxBytes - int64(len(suffix)), 0)
-	return s[:cut] + suffix
 }
