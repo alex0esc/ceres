@@ -20,21 +20,22 @@ import (
 // AgentConfig is the on-disk representation of an agent, loaded from a .toml file
 type AgentConfig struct {
 	Endpoint             string         `toml:"endpoint"`               // Reference to endpoint name (resolved against endpoints map)
-	ModelName            string         `toml:"model_name"`            // Model identifier at the endpoint
-	ExtraBody            map[string]any `toml:"extra_body,omitempty"`  // Additional API request parameters
-	ReasoningSummary     bool           `toml:"reasoning_summary"`     // Use reasoning summary instead of full reasoning
-	Name                 string         `toml:"name"`                  // Agent name (supports <name> placeholder in system_prompt)
-	Description          string         `toml:"description"`           // Human-readable description
-	ReasoningEffort      string         `toml:"reasoning_effort"`      // Reasoning effort level (none/low/medium/high)
-	Quantity             int            `toml:"quantity"`              // Number of agent instances to create
-	Subagent             bool           `toml:"subagent"`              // Whether this is a subagent
-	MaxToolIterations    int            `toml:"max_tool_iterations"`   // Maximum tool call rounds per request
-	MaxToolResultChars   int            `toml:"max_tool_result_chars"` // Maximum size of a single tool result in characters
-	Tools                []string       `toml:"tools"`                 // List of tool names to register
-	SystemPrompt         string         `toml:"system_prompt"`         // System prompt (use <name> as placeholder)
-	CompressionThreshold int64          `toml:"compression_threshold"` // Token count threshold for history compression
-	NumMessagesToKeep    int            `toml:"num_messages_to_keep"`  // Number of messages to keep after compression
-	CompressionPrompt    string         `toml:"compression_prompt"`    // Prompt used for history compression
+	ModelName            string         `toml:"model_name"`             // Model identifier at the endpoint
+	ExtraBody            map[string]any `toml:"extra_body,omitempty"`   // Additional API request parameters
+	ReasoningSummary     bool           `toml:"reasoning_summary"`      // Use reasoning summary instead of full reasoning
+	Name                 string         `toml:"name"`                   // Agent name (supports <name> placeholder in system_prompt)
+	Description          string         `toml:"description"`            // Human-readable description
+	SandboxContainer     string         `toml:"sandbox_container_name"` // Docker container this agent's sandbox tools connect to ("" = no sandbox)
+	ReasoningEffort      string         `toml:"reasoning_effort"`       // Reasoning effort level (none/low/medium/high)
+	Quantity             int            `toml:"quantity"`               // Number of agent instances to create
+	Subagent             bool           `toml:"subagent"`               // Whether this is a subagent
+	MaxToolIterations    int            `toml:"max_tool_iterations"`    // Maximum tool call rounds per request
+	MaxToolResultChars   int            `toml:"max_tool_result_chars"`  // Maximum size of a single tool result in characters
+	Tools                []string       `toml:"tools"`                  // List of tool names to register
+	SystemPrompt         string         `toml:"system_prompt"`          // System prompt (use <name> as placeholder)
+	CompressionThreshold int64          `toml:"compression_threshold"`  // Token count threshold for history compression
+	NumMessagesToKeep    int            `toml:"num_messages_to_keep"`   // Number of messages to keep after compression
+	CompressionPrompt    string         `toml:"compression_prompt"`     // Prompt used for history compression
 }
 
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
@@ -96,7 +97,7 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 		}
 		client.History = loadedHistory
 
-		agnt, err := NewAgent(name, cfg.Description, client, cfg.Subagent, cronLib)
+		agnt, err := NewAgent(name, cfg.Description, cfg.SandboxContainer, client, cfg.Subagent, cronLib)
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +169,8 @@ func LoadAgentsFromDir(endpoints map[string]inference.Endpoint, cronLib *cron.Cr
 }
 
 // CreateDefaultAgentFile creates a main agent configuration file if does not exist
-func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); err != nil {
+func ensureOneAgentFile(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create agents directory: %w", err)
 	}
 	entries, err := os.ReadDir(dir)
@@ -189,6 +191,7 @@ func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); e
 		ExtraBody:            nil,
 		ReasoningSummary:     false,
 		Description:          "The main agent of the system.",
+		SandboxContainer:     "ceres-sandbox",
 		ReasoningEffort:      string(responses.ReasoningEffortMedium),
 		SystemPrompt:         "You are <name>, a helpful AI assistant.",
 		Tools:                tool.Names(),
@@ -199,8 +202,8 @@ func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); e
 		MaxToolResultChars:   100000,
 		NumMessagesToKeep:    8,
 		CompressionThreshold: 200000,
-		CompressionPrompt:    "This is a message injected by the system, your task is to compress the current chat. " +
-							  "Dont ask any question, do the summary in this turn and keep everything that is relevant.",
+		CompressionPrompt: "This is a message injected by the system, your task is to compress the current chat. " +
+			"Dont ask any question, do the summary in this turn and keep everything that is relevant.",
 	}
 	path := filepath.Join(dir, "ceres.toml")
 	file, err := os.Create(path)
@@ -219,6 +222,7 @@ func ensureOneAgentFile(dir string) error {	if err := os.MkdirAll(dir, 0o755); e
 # Model Name: The model identifier at the endpoint (e.g. "qwen3.8", "gpt-4")
 # Name: Agent name (use <name> in system_prompt as placeholder)
 # Description: Human-readable description of the agent
+# Sandbox Container Name: Docker container the agent's sandbox tools connect to ("" = no sandbox)
 # Reasoning Effort: Reasoning effort level (none/low/medium/high)
 # Reasoning Summary: Use summary instead of full reasoning output
 # System Prompt: The agent's system prompt (use <name> as placeholder for agent name)

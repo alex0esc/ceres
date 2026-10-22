@@ -20,12 +20,11 @@ import (
 // If 'channel' is omitted or empty, the message is sent as a DM to the configured user.
 // If 'channel' is provided, the message is sent to that channel.
 type DiscordMsgTool struct {
-	session       *discordgo.Session
-	guildID       string
-	userID        string
-	containerName string
-	timeout       time.Duration
-	maxFileSize   int64
+	session     *discordgo.Session
+	guildID     string
+	userID      string
+	timeout     time.Duration
+	maxFileSize int64
 }
 
 // NewDiscordMsgTool constructs a DiscordMsgTool, reading all relevant config
@@ -38,8 +37,6 @@ func NewDiscordMsgTool() *DiscordMsgTool {
 	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
 
 	toolCfg := tool.GetToolConfig()
-	containerName := config.ReadEntry(toolCfg, "sandbox.container_name", "ceres-sandbox")
-	timeout := config.ReadEntry(toolCfg, "sandbox.timeout", time.Second*120)
 
 	var defSize int64 = 8192
 	maxFileSize := config.ReadEntry(toolCfg, "discord.max_file_size_kb", defSize) * 1024
@@ -50,12 +47,11 @@ func NewDiscordMsgTool() *DiscordMsgTool {
 	}
 
 	return &DiscordMsgTool{
-		session:       session,
-		guildID:       guildID,
-		userID:        userID,
-		containerName: containerName,
-		timeout:       timeout,
-		maxFileSize:   maxFileSize,
+		session:     session,
+		guildID:     guildID,
+		userID:      userID,
+		timeout:     sandboxOpTimeout,
+		maxFileSize: maxFileSize,
 	}
 }
 
@@ -119,13 +115,13 @@ func (t *DiscordMsgTool) Handler() tool.ToolHandler {
 
 		channel := args.Channel
 		if channel == "" {
-			return t.sendDM(ctx, args.Message, args.Files)
+			return t.sendDM(ctx, handle.SandboxContainer(), args.Message, args.Files)
 		}
-		return t.sendToChannel(ctx, channel, args.Message, args.Files)
+		return t.sendToChannel(ctx, handle.SandboxContainer(), channel, args.Message, args.Files)
 	}
 }
 
-func (t *DiscordMsgTool) sendDM(ctx context.Context, message string, files []string) (string, error) {
+func (t *DiscordMsgTool) sendDM(ctx context.Context, containerName, message string, files []string) (string, error) {
 	if t.userID == "" {
 		return "", fmt.Errorf("discord_msg: user_id is not configured under 'discord.user_id'")
 	}
@@ -135,7 +131,7 @@ func (t *DiscordMsgTool) sendDM(ctx context.Context, message string, files []str
 		return "", fmt.Errorf("discord_msg: failed to create DM channel with user %s: %w", t.userID, err)
 	}
 
-	if err := t.sendMessageWithFiles(ctx, channel.ID, message, files); err != nil {
+	if err := t.sendMessageWithFiles(ctx, containerName, channel.ID, message, files); err != nil {
 		return "", fmt.Errorf("discord_msg: %w", err)
 	}
 
@@ -150,7 +146,7 @@ func (t *DiscordMsgTool) sendDM(ctx context.Context, message string, files []str
 	return string(out), nil
 }
 
-func (t *DiscordMsgTool) sendToChannel(ctx context.Context, channel, message string, files []string) (string, error) {
+func (t *DiscordMsgTool) sendToChannel(ctx context.Context, containerName, channel, message string, files []string) (string, error) {
 	target, err := t.findChannelByName(channel)
 	if err != nil {
 		return "", fmt.Errorf("discord_msg: failed to list channels: %w", err)
@@ -159,7 +155,7 @@ func (t *DiscordMsgTool) sendToChannel(ctx context.Context, channel, message str
 		return "", fmt.Errorf("discord_msg: channel %q does not exist", channel)
 	}
 
-	if err := t.sendMessageWithFiles(ctx, target.ID, message, files); err != nil {
+	if err := t.sendMessageWithFiles(ctx, containerName, target.ID, message, files); err != nil {
 		return "", fmt.Errorf("discord_msg: %w", err)
 	}
 
@@ -174,7 +170,7 @@ func (t *DiscordMsgTool) sendToChannel(ctx context.Context, channel, message str
 	return string(out), nil
 }
 
-func (t *DiscordMsgTool) sendMessageWithFiles(ctx context.Context, channelID, message string, filePaths []string) error {
+func (t *DiscordMsgTool) sendMessageWithFiles(ctx context.Context, containerName, channelID, message string, filePaths []string) error {
 	if len(filePaths) == 0 {
 		return SendChunked(t.session, channelID, message)
 	}
@@ -183,7 +179,7 @@ func (t *DiscordMsgTool) sendMessageWithFiles(ctx context.Context, channelID, me
 		return fmt.Errorf("message is %d characters, which exceeds Discord's 2000 character limit for messages with attachments", len(message))
 	}
 
-	files, err := t.readFilesFromContainer(ctx, filePaths)
+	files, err := t.readFilesFromContainer(ctx, containerName, filePaths)
 	if err != nil {
 		return err
 	}
@@ -198,10 +194,10 @@ func (t *DiscordMsgTool) sendMessageWithFiles(ctx context.Context, channelID, me
 	return nil
 }
 
-func (t *DiscordMsgTool) readFilesFromContainer(ctx context.Context, paths []string) ([]*discordgo.File, error) {
+func (t *DiscordMsgTool) readFilesFromContainer(ctx context.Context, containerName string, paths []string) ([]*discordgo.File, error) {
 	files := make([]*discordgo.File, 0, len(paths))
 	for _, path := range paths {
-		data, _, err := readFileFromContainer(ctx, t.containerName, t.timeout, t.maxFileSize, path)
+		data, _, err := readFileFromContainer(ctx, containerName, t.timeout, t.maxFileSize, path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %q: %w", path, err)
 		}

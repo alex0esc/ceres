@@ -1,4 +1,3 @@
-
 package tools
 
 import (
@@ -7,31 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileInsertTool inserts text into a file inside the sandbox container,
 // before a given line number.
-type FileInsertTool struct {
-	containerName string
-	timeout       time.Duration
-}
+type FileInsertTool struct{}
 
-// NewFileInsertTool constructs a FileInsertTool, reading all relevant config
-// values once up front.
+// NewFileInsertTool constructs a FileInsertTool.
 func NewFileInsertTool() FileInsertTool {
-	cfg := tool.GetToolConfig()
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second*120)
-
-	return FileInsertTool{
-		containerName: containerName,
-		timeout:       timeout,
-	}
+	return FileInsertTool{}
 }
 
 func (FileInsertTool) Name() string {
@@ -77,13 +63,13 @@ func (t FileInsertTool) Handler() tool.ToolHandler {
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("file_insert: invalid arguments: %w", err)
 		}
-		return t.fileInsert(ctx, args.Path, args.Line, args.Content)
+		return t.fileInsert(ctx, handle.SandboxContainer(), args.Path, args.Line, args.Content)
 	}
 }
 
 // fileInsert inserts content into a file in the sandbox container before
 // the specified line number.
-func (t FileInsertTool) fileInsert(ctx context.Context, path string, line int, content string) (string, error) {
+func (t FileInsertTool) fileInsert(ctx context.Context, containerName, path string, line int, content string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", fmt.Errorf("file_insert: path must not be empty")
 	}
@@ -106,12 +92,12 @@ func (t FileInsertTool) fileInsert(ctx context.Context, path string, line int, c
 		return respond(0)
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
+	execCtx, cancel := context.WithTimeout(ctx, sandboxOpTimeout)
 	defer cancel()
 
 	// Read target file
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, containerName, readCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_insert: failed to read file from sandbox: %w", err)
 	}
@@ -147,7 +133,7 @@ func (t FileInsertTool) fileInsert(ctx context.Context, path string, line int, c
 	// Write safely via base64 to avoid shell escaping & heredoc issues
 	b64 := base64.StdEncoding.EncodeToString([]byte(newContent))
 	writeCmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
-	_, stderr, exitCode, err = runInContainer(execCtx, t.containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, containerName, writeCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_insert: failed to write file to sandbox: %w", err)
 	}

@@ -28,11 +28,9 @@ func (s AgentState) String() string {
 	}
 }
 
-
 type ClientHandle interface {
 	AppendUserPrompt(prompt task.Prompt)
 }
-
 
 type WakeupHandle interface {
 	Name() string
@@ -41,9 +39,7 @@ type WakeupHandle interface {
 	CronSpec() string
 	Protected() bool
 	Prompts() []string
-
 }
-
 
 // AgentHandle describes everything a tool needs to know about an agent.
 type AgentHandle interface {
@@ -54,4 +50,5 @@ type AgentHandle interface {
 	ClientHandle() ClientHandle
 	CurrentTask() *task.Task
 	WakeupManager() *wakeup.Manager
+	SandboxContainer() string
 }

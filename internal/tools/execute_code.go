@@ -17,8 +17,7 @@ import (
 // and returns its stdout/stderr/exit code. Intended for quick, self-contained
 // tasks (calculations, data wrangling, etc.), not long-running scripts.
 type ExecuteCodeTool struct {
-	containerName string
-	timeout       time.Duration
+	timeout time.Duration
 }
 
 // NewExecuteCodeTool constructs an ExecuteCodeTool, reading all relevant
@@ -26,12 +25,10 @@ type ExecuteCodeTool struct {
 func NewExecuteCodeTool() ExecuteCodeTool {
 	cfg := tool.GetToolConfig()
 
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
 	timeout := config.ReadEntry(cfg, "execute_code.timeout", time.Second*180)
 
 	return ExecuteCodeTool{
-		containerName: containerName,
-		timeout:       timeout,
+		timeout: timeout,
 	}
 }
 
@@ -79,7 +76,7 @@ func (t ExecuteCodeTool) Handler() tool.ToolHandler {
 
 		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
 		defer cancel()
-		stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, runCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, handle.SandboxContainer(), runCmd)
 		if err != nil {
 			return "", fmt.Errorf("execute_code: failed to execute code in sandbox: %w", err)
 		}
