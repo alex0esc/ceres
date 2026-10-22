@@ -22,22 +22,18 @@ const killAfterBuffer = 5 * time.Second
 // to run arbitrary commands without affecting the host or the agent's own
 // container.
 type BashTool struct {
-	maxTimeout    time.Duration
-	containerName string
+	maxTimeout time.Duration
 }
 
 // NewBashTool constructs a BashTool, reading all relevant config values once
 // up front so the handler doesn't need to re-read config on every call.
 func NewBashTool() BashTool {
-	maxTimeout := config.ReadEntry(tool.GetToolConfig(), "sandbox.timeout", time.Second * 120)
-	containerName := config.ReadEntry(tool.GetToolConfig(), "sandbox.container_name", "ceres-sandbox")
+	maxTimeout := config.ReadEntry(tool.GetToolConfig(), "bash.timeout", time.Second*120)
 
 	return BashTool{
-		maxTimeout:    maxTimeout,
-		containerName: containerName,
+		maxTimeout: maxTimeout,
 	}
 }
-
 
 func (BashTool) Name() string {
 	return "bash"
@@ -109,7 +105,7 @@ func (b BashTool) Handler() tool.ToolHandler {
 			shellQuote(args.Command),
 		)
 
-		stdout, stderr, exitCode, err := runInContainer(execCtx, b.containerName, wrappedCmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, handle.SandboxContainer(), wrappedCmd)
 		if err != nil {
 			return "", fmt.Errorf("bash: failed to execute command in sandbox: %w", err)
 		}

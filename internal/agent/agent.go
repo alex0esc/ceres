@@ -12,37 +12,38 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-
 type Agent struct {
-	name          string
-	description   string
-	Client        *inference.Client
-	subagent      bool
+	name             string
+	description      string
+	sandboxContainer string
+	Client           *inference.Client
+	subagent         bool
 
-	mutex         sync.Mutex
-	queue         []*task.Task
-	state         handles.AgentState
-	workCh        chan struct{} // signals that there is work to do
+	mutex  sync.Mutex
+	queue  []*task.Task
+	state  handles.AgentState
+	workCh chan struct{} // signals that there is work to do
 
-	currentTask   *task.Task
+	currentTask *task.Task
 
-	cronLib      *cron.Cron 
-	wakeups       *wakeup.Manager
+	cronLib *cron.Cron
+	wakeups *wakeup.Manager
 }
 
 // NewAgent creates an agent together with its wakeup manager. The manager loads
 // the agent's wakeups from the wakeup config (wakeup.DbOpen must have been
 // called), gets the agent's SubmitTask function, and is started and stopped
 // together with the agent.
-func NewAgent(name, description string, client *inference.Client, subagent bool, cronLib *cron.Cron) (*Agent, error) {
+func NewAgent(name, description, sandboxContainer string, client *inference.Client, subagent bool, cronLib *cron.Cron) (*Agent, error) {
 	agent := &Agent{
-		name:        name,
-		description: description,
-		Client:      client,
-		subagent:    subagent,
-		state:       handles.AgentStateStopped,
-		workCh:      nil,
-		cronLib:    cronLib,
+		name:             name,
+		description:      description,
+		sandboxContainer: sandboxContainer,
+		Client:           client,
+		subagent:         subagent,
+		state:            handles.AgentStateStopped,
+		workCh:           nil,
+		cronLib:          cronLib,
 	}
 
 	wakeups, err := wakeup.NewManager(name, agent.SubmitTask, cronLib)
@@ -53,7 +54,6 @@ func NewAgent(name, description string, client *inference.Client, subagent bool,
 
 	return agent, nil
 }
-
 
 // Resume allows new tasks to be submitted and processed again
 func (agent *Agent) Start() error {
@@ -99,12 +99,12 @@ func (agent *Agent) Stop() {
 	}
 }
 
-func (agent *Agent) Name() string        { return agent.name }
-func (agent *Agent) Description() string { return agent.description }
-func (agent *Agent) IsSubagent() bool    { return agent.subagent }
+func (agent *Agent) Name() string                       { return agent.name }
+func (agent *Agent) Description() string                { return agent.description }
+func (agent *Agent) SandboxContainer() string           { return agent.sandboxContainer }
+func (agent *Agent) IsSubagent() bool                   { return agent.subagent }
 func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
 func (agent *Agent) WakeupManager() *wakeup.Manager     { return agent.wakeups }
-
 
 func (agent *Agent) CurrentTask() *task.Task {
 	agent.mutex.Lock()

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -20,9 +19,7 @@ import (
 // ViewImageTool reads an image from the sandbox container and appends it
 // to the agent's chat history as a base64-encoded image.
 type ViewImageTool struct {
-	containerName string
-	timeout       time.Duration
-	maxSize       int64
+	maxSize int64
 }
 
 // NewViewImageTool constructs a ViewImageTool, reading all relevant config
@@ -30,17 +27,11 @@ type ViewImageTool struct {
 func NewViewImageTool() ViewImageTool {
 	cfg := tool.GetToolConfig()
 
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-
-	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second * 120)
-
 	var defSize int64 = 8192
 	maxSize := config.ReadEntry(cfg, "view_image.max_size_kb", defSize) * 1024
 
 	return ViewImageTool{
-		containerName: containerName,
-		timeout:       timeout,
-		maxSize:       maxSize,
+		maxSize: maxSize,
 	}
 }
 
@@ -84,7 +75,7 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: path must not be empty")
 		}
 
-		imageData, size, err := readFileFromContainer(ctx, t.containerName, t.timeout, t.maxSize, args.Path)
+		imageData, size, err := readFileFromContainer(ctx, handle.SandboxContainer(), sandboxOpTimeout, t.maxSize, args.Path)
 		if err != nil {
 			return "", fmt.Errorf("view_image: %w", err)
 		}

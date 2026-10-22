@@ -1,37 +1,22 @@
 package tools
 
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileReadTool reads a file inside the sandbox container and returns its
 // content, optionally prefixed with line numbers.
-type FileReadTool struct {
-	containerName string
-	timeout       time.Duration
-}
+type FileReadTool struct{}
 
-// NewFileReadTool constructs a FileReadTool, reading all relevant config
-// values once up front.
+// NewFileReadTool constructs a FileReadTool.
 func NewFileReadTool() FileReadTool {
-	cfg := tool.GetToolConfig()
-
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second*120)
-
-	return FileReadTool{
-		containerName: containerName,
-		timeout:       timeout,
-	}
+	return FileReadTool{}
 }
 
 func (FileReadTool) Name() string {
@@ -96,13 +81,13 @@ func (t FileReadTool) Handler() tool.ToolHandler {
 		// Line numbers are on unless explicitly disabled (null/omitted = true).
 		withLineNumbers := args.LineNumbers == nil || *args.LineNumbers
 
-		execCtx, cancel := context.WithTimeout(ctx, t.timeout+2*killAfterBuffer)
+		execCtx, cancel := context.WithTimeout(ctx, sandboxOpTimeout+2*killAfterBuffer)
 		defer cancel()
 		// "cat" is used instead of the docker SDK's file-copy API so we can
 		// reuse the existing exec plumbing (runInContainer) and get a clear
 		// stderr/exit code if the file is missing or unreadable.
 		cmd := fmt.Sprintf("cat -- %s", shellQuote(args.Path))
-		stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, cmd)
+		stdout, stderr, exitCode, err := runInContainer(execCtx, handle.SandboxContainer(), cmd)
 		if err != nil {
 			return "", fmt.Errorf("file_read: failed to read file from sandbox: %w", err)
 		}

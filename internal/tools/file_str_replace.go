@@ -6,31 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
 // FileStrReplaceTool replaces a unique string occurrence inside a file in
 // the sandbox container.
-type FileStrReplaceTool struct {
-	containerName string
-	timeout       time.Duration
-}
+type FileStrReplaceTool struct{}
 
-// NewFileStrReplaceTool constructs a FileStrReplaceTool, reading all
-// relevant config values once up front.
+// NewFileStrReplaceTool constructs a FileStrReplaceTool.
 func NewFileStrReplaceTool() FileStrReplaceTool {
-	cfg := tool.GetToolConfig()
-	containerName := config.ReadEntry(cfg, "sandbox.container_name", "ceres-sandbox")
-	timeout := config.ReadEntry(cfg, "sandbox.timeout", time.Second*120)
-
-	return FileStrReplaceTool{
-		containerName: containerName,
-		timeout:       timeout,
-	}
+	return FileStrReplaceTool{}
 }
 
 func (FileStrReplaceTool) Name() string {
@@ -77,7 +64,7 @@ func (t FileStrReplaceTool) Handler() tool.ToolHandler {
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			return "", fmt.Errorf("file_str_replace: invalid arguments: %w", err)
 		}
-		return t.fileStrReplace(ctx, args.Path, args.OldStr, args.NewStr)
+		return t.fileStrReplace(ctx, handle.SandboxContainer(), args.Path, args.OldStr, args.NewStr)
 	}
 }
 
@@ -87,7 +74,7 @@ func (t FileStrReplaceTool) Handler() tool.ToolHandler {
 // the line-shifting issues that come with line-number-based replacements.
 // All \r\n line endings are normalized to \n, in the file as well as in
 // old_str and new_str; the file is therefore written back with LF endings.
-func (t FileStrReplaceTool) fileStrReplace(ctx context.Context, path, oldStr, newStr string) (string, error) {
+func (t FileStrReplaceTool) fileStrReplace(ctx context.Context, containerName, path, oldStr, newStr string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("file_str_replace: path must not be empty")
 	}
@@ -95,12 +82,12 @@ func (t FileStrReplaceTool) fileStrReplace(ctx context.Context, path, oldStr, ne
 		return "", fmt.Errorf("file_str_replace: old_str must not be empty")
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
+	execCtx, cancel := context.WithTimeout(ctx, sandboxOpTimeout)
 	defer cancel()
 
 	// Read the current file content.
 	readCmd := fmt.Sprintf("cat -- %s", shellQuote(path))
-	stdout, stderr, exitCode, err := runInContainer(execCtx, t.containerName, readCmd)
+	stdout, stderr, exitCode, err := runInContainer(execCtx, containerName, readCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to read file from sandbox: %w", err)
 	}
@@ -132,7 +119,7 @@ func (t FileStrReplaceTool) fileStrReplace(ctx context.Context, path, oldStr, ne
 	// any clashes with "EOF"-like markers inside the content.
 	b64 := base64.StdEncoding.EncodeToString([]byte(newContent))
 	writeCmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
-	_, stderr, exitCode, err = runInContainer(execCtx, t.containerName, writeCmd)
+	_, stderr, exitCode, err = runInContainer(execCtx, containerName, writeCmd)
 	if err != nil {
 		return "", fmt.Errorf("file_str_replace: failed to write file to sandbox: %w", err)
 	}

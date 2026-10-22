@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -20,13 +21,16 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-
-//all subagents needed for subagent tools
+// all subagents needed for subagent tools
 var subAgents map[string]handles.AgentHandle = nil
+
+// sandboxOpTimeout is the fixed, ample timeout used by the lightweight sandbox
+// operations (file read/edit, view_image, discord file reads) that don't need
+// a user-tunable, potentially long-running timeout like bash.
+const sandboxOpTimeout = 10 * time.Second
 
 // used by all sandbox-related tools (bash, read_file, write_file).
 var dockerClient *client.Client = nil
-
 
 func SetSubagents(agents map[string]handles.AgentHandle) {
 	subAgents = agents
@@ -39,13 +43,11 @@ func getSubagents() map[string]handles.AgentHandle {
 	return subAgents
 }
 
-
+// InitDockerClient always attempts to connect to the Docker daemon. If the
+// daemon is unreachable (e.g. Docker is not installed on this host) it logs a
+// warning and leaves the client nil, so Ceres still starts; sandbox tools then
+// report "not connected to docker daemon" per call.
 func InitDockerClient() error {
-	active := config.ReadEntry(tool.GetToolConfig(), "sandbox.active", false)
-	if !active {
-		return nil
-	}
-
 	opts := []client.Opt{client.WithAPIVersionNegotiation()}
 
 	host := config.ReadEntry(tool.GetToolConfig(), "sandbox.docker_host", "")
@@ -55,13 +57,21 @@ func InitDockerClient() error {
 
 	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
-		return fmt.Errorf("failed to initialize docker client: %w", err)
+		slog.Warn("failed to create docker client; sandbox tools will be unavailable", "error", err)
+		return nil
+	}
+
+	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(pingCtx); err != nil {
+		slog.Warn("could not connect to docker daemon; sandbox tools will be unavailable", "error", err)
+		cli.Close()
+		return nil
 	}
 
 	dockerClient = cli
 	return nil
 }
-
 
 func CloseDockerClient() {
 	if dockerClient != nil {
@@ -69,7 +79,6 @@ func CloseDockerClient() {
 		dockerClient = nil
 	}
 }
-
 
 // runInContainer runs cmd via "bash -c" inside the given container using
 // Docker's exec API and returns separated stdout/stderr plus the exit code.
@@ -79,10 +88,13 @@ func CloseDockerClient() {
 // the read is abandoned, the exec is killed as a best-effort fallback, and
 // ctx.Err() is returned.
 func runInContainer(ctx context.Context, containerName, cmd string) (stdout string, stderr string, exitCode int, err error) {
-	if dockerClient == nil {
-		return "", "", 0, fmt.Errorf("docker sandbox is not activated")
+	if containerName == "" {
+		return "", "", 0, fmt.Errorf("no sandbox container configured for this agent")
 	}
-	
+	if dockerClient == nil {
+		return "", "", 0, fmt.Errorf("not connected to docker daemon")
+	}
+
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"bash", "-c", cmd},
 		AttachStdout: true,
@@ -151,8 +163,6 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-
-
 // discordMaxMessageLength is the maximum number of characters allowed per
 // Discord message. Discord's hard limit is 2000 for normal messages (up to
 // 4000 in some boosted contexts); we stay safely under that.
@@ -171,8 +181,6 @@ func SendChunked(s *discordgo.Session, channelID, msg string) error {
 	}
 	return nil
 }
-
-
 
 // splitMessage splits s into chunks of at most maxLen characters, preferring
 // to break on newlines and, failing that, on spaces, so that words and lines
@@ -205,7 +213,6 @@ func splitMessage(s string, maxLen int) []string {
 	return chunks
 }
 
-
 // lastIndexInRange returns the last index of sep within s[:limit], or -1 if
 // not found.
 func lastIndexInRange(s, sep string, limit int) int {
@@ -214,8 +221,6 @@ func lastIndexInRange(s, sep string, limit int) int {
 	}
 	return strings.LastIndex(s[:limit], sep)
 }
-
-
 
 // readFileFromContainer stats, size-checks, reads, and base64-decodes a
 // single file from inside the given sandbox container. Used by any tool
