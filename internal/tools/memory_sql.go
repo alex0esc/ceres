@@ -118,13 +118,7 @@ func (m MemorySQLTool) Handler() tool.ToolHandler {
 		if agentName == "" {
 			return "", fmt.Errorf("memory_sql: agent handle returned empty name")
 		}
-
-		// filepath.Base strips any path components (path traversal protection).
-		fileName := filepath.Base(agentName)
-		if fileName == "." || fileName == ".." || fileName == string(os.PathSeparator) {
-			return "", fmt.Errorf("memory_sql: invalid agent name %q", agentName)
-		}
-		dbPath := filepath.Join(constants.MemoryFolderPath, fileName+".db")
+		dbPath := constants.AgentMemoriesDBPath(agentName)
 
 		var args struct {
 			SQL string `json:"sql"`

@@ -31,9 +31,9 @@ type Agent struct {
 }
 
 // NewAgent creates an agent together with its wakeup manager. The manager loads
-// the agent's wakeups from the wakeup config (wakeup.DbOpen must have been
-// called), gets the agent's SubmitTask function, and is started and stopped
-// together with the agent.
+// the agent's wakeups from its own database (database/<agent name>/
+// persistent_data.db), gets the agent's SubmitTask function, and is started
+// and stopped together with the agent.
 func NewAgent(name, description, sandboxContainer string, client *inference.Client, subagent bool, cronLib *cron.Cron) (*Agent, error) {
 	agent := &Agent{
 		name:             name,

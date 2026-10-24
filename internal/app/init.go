@@ -78,8 +78,8 @@ func Shutdown() {
 	agents = nil
 	cronLib = nil
 	cfg = nil
-	wakeup.DbClose()
-	history.StorageClose()
+	wakeup.DbCloseAll()
+	history.StorageCloseAll()
 	tool.ClearRegistry()
 	platform.ClearRegistry()
 	command.ClearRegistry()
@@ -124,12 +124,6 @@ func loadConfigs() error {
 	wakeups, err := wakeup.LoadWakeupsFromFile()
 	if err != nil {
 		return fmt.Errorf("error loading wakeups from wakeups.toml: %v", err)
-	}
-	wakeup.DbOpen()
-
-	// open the history db before loading agents, so each agent can restore its chat history
-	if err := history.StorageOpen(); err != nil {
-		return fmt.Errorf("error opening history database: %v", err)
 	}
 
 	agents, err = agent.LoadAgentsFromDir(endpoints, cronLib)
