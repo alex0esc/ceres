@@ -23,7 +23,6 @@ type AgentConfig struct {
 	ModelName            string         `toml:"model_name"`             // Model identifier at the endpoint
 	ExtraBody            map[string]any `toml:"extra_body,omitempty"`   // Additional API request parameters
 	ReasoningSummary     bool           `toml:"reasoning_summary"`      // Use reasoning summary instead of full reasoning
-	Name                 string         `toml:"name"`                   // Agent name (supports <name> placeholder in system_prompt)
 	Description          string         `toml:"description"`            // Human-readable description
 	SandboxContainer     string         `toml:"sandbox_container_name"` // Docker container this agent's sandbox tools connect to ("" = no sandbox)
 	ReasoningEffort      string         `toml:"reasoning_effort"`       // Reasoning effort level (none/low/medium/high)
@@ -39,7 +38,8 @@ type AgentConfig struct {
 }
 
 // LoadAgentFromFile reads an agent's .toml config and wires it up with the
-// matching endpoint and tools from the provided registries. If Quantity is
+// matching endpoint and tools from the provided registries. The agent is named
+// after its config file: Ceres.toml defines the agent "Ceres". If Quantity is
 // greater than 1, multiple agents are returned, named "<name>-1" .. "<name>-n".
 func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cronLib *cron.Cron) ([]*Agent, error) {
 	var cfg AgentConfig
@@ -50,22 +50,21 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 	if missing := missingRequiredKeys(md); len(missing) > 0 {
 		return nil, fmt.Errorf("agent config %q is missing required field(s): %s", path, strings.Join(missing, ", "))
 	}
-	if cfg.Name == "" {
-		return nil, fmt.Errorf("invalid agent config %q: missing name", path)
-	}
+	// the agent is named after its config file (without the extension)
+	baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	// resolve endpoint by name
 	endpoint, ok := endpoints[cfg.Endpoint]
 	if !ok {
-		return nil, fmt.Errorf("agent %q references unknown endpoint %q", cfg.Name, cfg.Endpoint)
+		return nil, fmt.Errorf("agent %q references unknown endpoint %q", baseName, cfg.Endpoint)
 	}
 
 	quantity := max(cfg.Quantity, 1)
 
 	agents := make([]*Agent, 0, quantity)
 	for i := range quantity {
-		name := cfg.Name
+		name := baseName
 		if quantity > 1 {
-			name = fmt.Sprintf("%s-%d", cfg.Name, i+1)
+			name = fmt.Sprintf("%s-%d", baseName, i+1)
 		}
 
 		client := inference.NewClient(&endpoint, cfg.ModelName)
@@ -186,7 +185,6 @@ func ensureOneAgentFile(dir string) error {
 	// no agent file found -> create default agent
 
 	cfg := AgentConfig{
-		Name:                 "Ceres",
 		ModelName:            "qwen3.8",
 		ExtraBody:            nil,
 		ReasoningSummary:     false,
@@ -205,7 +203,7 @@ func ensureOneAgentFile(dir string) error {
 		CompressionPrompt: "This is a message injected by the system, your task is to compress the current chat. " +
 			"Dont ask any question, do the summary in this turn and keep everything that is relevant.",
 	}
-	path := filepath.Join(dir, "ceres.toml")
+	path := filepath.Join(dir, "Ceres.toml")
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create default agent file: %w", err)
@@ -217,10 +215,10 @@ func ensureOneAgentFile(dir string) error {
 #
 # This file defines an AI agent and its behavior.
 # You can create multiple agent files to run different agents.
+# The agent's name is derived from the file name (myagent.toml -> agent "myagent").
 #
 # Endpoint: Reference to an endpoint defined in your endpoints config
 # Model Name: The model identifier at the endpoint (e.g. "qwen3.8", "gpt-4")
-# Name: Agent name (use <name> in system_prompt as placeholder)
 # Description: Human-readable description of the agent
 # Sandbox Container Name: Docker container the agent's sandbox tools connect to ("" = no sandbox)
 # Reasoning Effort: Reasoning effort level (none/low/medium/high)

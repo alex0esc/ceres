@@ -36,10 +36,10 @@ type Manager struct {
 	external map[string]*WakeUp
 }
 
-// NewManager loads the prompt wakeups of agentName from the database (DbOpen
-// must have been called). submit is the agent's submit function (its
-// SubmitTask), cronLib schedules recurring wakeups. Nothing is scheduled until
-// StartAll.
+// NewManager loads the prompt wakeups of agentName from the agent's database
+// (database/<agent name>/persistent_data.db). submit is the agent's submit
+// function (its SubmitTask), cronLib schedules recurring wakeups. Nothing is
+// scheduled until StartAll.
 func NewManager(agentName string, submit SubmitFunc, cronLib *cron.Cron) (*Manager, error) {
 	if submit == nil {
 		return nil, fmt.Errorf("wakeup manager for agent %q: submit function is nil", agentName)
