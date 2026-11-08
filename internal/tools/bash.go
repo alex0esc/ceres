@@ -21,31 +21,22 @@ const killAfterBuffer = 5 * time.Second
 // the Docker SDK. It is intended to give the agent an isolated environment
 // to run arbitrary commands without affecting the host or the agent's own
 // container.
-type BashTool struct {
-	maxTimeout time.Duration
-}
+type BashTool struct{}
 
-// NewBashTool constructs a BashTool, reading all relevant config values once
-// up front so the handler doesn't need to re-read config on every call.
+// NewBashTool constructs a BashTool. The maximum timeout is configured per
+// agent and read in the handler.
 func NewBashTool() BashTool {
-	maxTimeout := config.ReadEntry(tool.GetToolConfig(), "bash.timeout", time.Second*120)
-
-	return BashTool{
-		maxTimeout: maxTimeout,
-	}
+	return BashTool{}
 }
 
 func (BashTool) Name() string {
 	return "bash"
 }
 
-func (b BashTool) Description() string {
-	return fmt.Sprintf(
-		"Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code.\n"+
-			"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n"+
-			"The maximum allowed timeout is %s; you may optionally specify a shorter one via the \"timeout_seconds\" argument.",
-		b.maxTimeout,
-	)
+func (BashTool) Description() string {
+	return "Executes a bash command inside an isolated sandbox docker container and returns stdout, stderr, and the exit code.\n" +
+		"Use this for running shell commands, scripts, or for executing and debugging code you wrote.\n" +
+		"You may optionally specify a shorter timeout via the \"timeout_seconds\" argument; the maximum allowed timeout is configured per agent (tool_settings.bash.timeout)."
 }
 
 func (BashTool) Parameters() map[string]any {
@@ -66,7 +57,7 @@ func (BashTool) Parameters() map[string]any {
 	}
 }
 
-func (b BashTool) Handler() tool.ToolHandler {
+func (BashTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Command        string   `json:"command"`
@@ -79,14 +70,16 @@ func (b BashTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("bash: command must not be empty")
 		}
 
-		sandboxTimeout := b.maxTimeout
+		maxTimeout := config.ReadEntry(handle.Config(), "tool_settings.bash.timeout", time.Second*120)
+
+		sandboxTimeout := maxTimeout
 		if args.TimeoutSeconds != nil {
 			requested := time.Duration(*args.TimeoutSeconds * float64(time.Second))
 			if requested <= 0 {
 				return "", fmt.Errorf("bash: timeout_seconds must be greater than 0")
 			}
-			if requested > b.maxTimeout {
-				return "", fmt.Errorf("bash: timeout_seconds (%s) exceeds the maximum allowed timeout (%s)", requested, b.maxTimeout)
+			if requested > maxTimeout {
+				return "", fmt.Errorf("bash: timeout_seconds (%s) exceeds the maximum allowed timeout (%s)", requested, maxTimeout)
 			}
 			sandboxTimeout = requested
 		}

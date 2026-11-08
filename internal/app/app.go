@@ -5,7 +5,6 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/inference"
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/robfig/cron/v3"
 )
 
@@ -13,7 +12,6 @@ import (
 var endpoints map[string]inference.Endpoint	
 var agents map[string]*agent.Agent
 var cronLib *cron.Cron
-var cfg *config.Config
 
 
 
@@ -32,12 +30,4 @@ func GetAgentList() []*agent.Agent {
         list = append(list, agnt)
     }
     return list
-}
-
-
-func GetAppConfig() *config.Config {
-	if cfg == nil {	
-		log.Fatal("server config is nil, initialize it first")
-	}
-	return cfg
 }

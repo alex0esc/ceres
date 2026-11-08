@@ -15,7 +15,7 @@
 - **Platforms** – Discord (DM listener with typing indicator, image uploads, slash commands).
 - **Reasoning/thinking** – support for reasoning summaries, optionally shown in the TUI.
 - **TUI + CLI** – Bubble Tea TUI (agent list, chat, input) plus a CLI loop (`tui`, `reload`, `exit`).
-- **Dynamic TOML config** – missing config values are written automatically with defaults.
+- **Dynamic TOML config** – missing config values are written automatically with defaults, preserving existing comments and formatting (two-space indentation, multi-line strings, dotted keys).
 
 ## Project structure
 
@@ -34,7 +34,7 @@ internal/
   commands/             Slash commands (help, clear, compress, interrupt, wakeup)
   constants/            Paths
 pkg/                    Registries & interfaces (tool, command, platform, config, handles)
-config/                 TOML config (app, endpoints, platform, tool, wakeups)
+config/                 TOML config (app, endpoints, wakeups)
 agents/                 Agent definitions (TOML)
 database/               SQLite DBs (memory per agent, histories, wakeups)
 ```
@@ -51,13 +51,16 @@ database/               SQLite DBs (memory per agent, histories, wakeups)
 
 All configs live in `config/` as TOML:
 
-- `appconfig.toml` – active platforms, TUI options
-- `endpoints.toml` – LLM endpoints (base URL, API key)
-- `platformconfig.toml` – Discord (token, IDs)
-- `toolconfig.toml` – per-tool timeouts (`bash`, `execute_code`, `subagent`, `wakeup`), web endpoints, view_image/memory limits, wakeup options
+- `appconfig.toml` – active platforms, platform settings (Discord token/IDs), timezone, TUI options, global tool settings (Discord upload size, search/extract endpoints)
+- `endpoints.toml` – LLM endpoints (base URL, API key) and infrastructure (sandbox Docker host)
 - `wakeups.toml` – external/scheduled wakeups
 
-Agents are defined in `agents/*.toml` (endpoint, model, tools, system prompt, subagent flag, compression). Each agent sets `sandbox_container_name` to the sandbox container its sandbox tools connect to (`""` = no sandbox); with `quantity > 1` all instances share that one container.
+Per-agent tool settings (timeouts, result limits, wakeup permissions) live in
+each agent's file under `[tool_settings.<tool>]`.
+
+When Ceres writes a missing value it inserts only that key: strings containing newlines become multi-line strings, arrays go one element per line, and nested keys use dotted notation under the deepest existing table. See [`CONFIGURATION.md`](CONFIGURATION.md) for the full reference.
+
+Agents are defined in `agents/*.toml` (endpoint, model, enabled tools, system prompt, subagent flag, compression). Each agent sets `sandbox_container_name` to the sandbox container its sandbox tools connect to (`""` = no sandbox); with `quantity > 1` all instances share that one container.
 
 ## Running
 
@@ -76,7 +79,7 @@ While running: `tui` (start the TUI), `reload` (reload config/agents), `exit` (s
 
 ## Tech stack
 
-Go 1.26 · Bubble Tea v2 / Lip Gloss / Glamour (TUI) · discordgo · Docker SDK · openai-go v3 · robfig/cron · modernc.org/sqlite · BurntSushi/toml
+Go 1.27 · Bubble Tea v2 / Lip Gloss / Glamour (TUI) · discordgo · Docker SDK · openai-go v3 · robfig/cron · modernc.org/sqlite · pelletier/go-toml/v2
 
 ---
 

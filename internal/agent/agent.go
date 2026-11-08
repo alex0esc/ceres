@@ -8,6 +8,7 @@ import (
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/internal/wakeup"
+	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/robfig/cron/v3"
 )
@@ -18,6 +19,7 @@ type Agent struct {
 	sandboxContainer string
 	Client           *inference.Client
 	subagent         bool
+	cfg              *config.Config
 
 	mutex  sync.Mutex
 	queue  []*task.Task
@@ -34,13 +36,14 @@ type Agent struct {
 // the agent's wakeups from its own database (database/<agent name>/
 // persistent_data.db), gets the agent's SubmitTask function, and is started
 // and stopped together with the agent.
-func NewAgent(name, description, sandboxContainer string, client *inference.Client, subagent bool, cronLib *cron.Cron) (*Agent, error) {
+func NewAgent(name, description, sandboxContainer string, client *inference.Client, subagent bool, cfg *config.Config, cronLib *cron.Cron) (*Agent, error) {
 	agent := &Agent{
 		name:             name,
 		description:      description,
 		sandboxContainer: sandboxContainer,
 		Client:           client,
 		subagent:         subagent,
+		cfg:              cfg,
 		state:            handles.AgentStateStopped,
 		workCh:           nil,
 		cronLib:          cronLib,
@@ -102,6 +105,7 @@ func (agent *Agent) Stop() {
 func (agent *Agent) Name() string                       { return agent.name }
 func (agent *Agent) Description() string                { return agent.description }
 func (agent *Agent) SandboxContainer() string           { return agent.sandboxContainer }
+func (agent *Agent) Config() *config.Config             { return agent.cfg }
 func (agent *Agent) IsSubagent() bool                   { return agent.subagent }
 func (agent *Agent) ClientHandle() handles.ClientHandle { return agent.Client }
 func (agent *Agent) WakeupManager() *wakeup.Manager     { return agent.wakeups }

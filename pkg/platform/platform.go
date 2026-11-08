@@ -3,13 +3,8 @@ package platform
 import (
 	"log"
 
-	"github.com/alex0esc/ceres/internal/constants"
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
-
-// Holds the global tool config
-var cfg *config.Config = nil
 
 // Holds all platforms keyed by their name
 var registry = make(map[string]Platform)
@@ -42,21 +37,4 @@ func Get(name string) Platform {
 		log.Fatalf("unknown platform %s", name)
 	} 
 	return plat
-}
-
-
-func LoadPlatformConfig() error {
-	conf, err := config.New(constants.PlatformConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg = conf
-	return nil
-}
-
-func GetPlatformConfig() *config.Config {
-	if cfg == nil {
-		log.Fatal("platforms: config not initialized.")
-	}
-	return cfg
 }

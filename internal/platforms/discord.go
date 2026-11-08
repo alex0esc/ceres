@@ -15,10 +15,10 @@ import (
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/internal/tools"
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/alex0esc/ceres/pkg/platform"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -42,7 +42,7 @@ type Discord struct {
 // DiscordTool's session, since it needs a gateway (websocket) connection
 // for listening to DMs while the tool only needs the REST API.
 func NewDiscord() *Discord {
-	cfg := platform.GetPlatformConfig()
+	cfg := appconfig.Get()
 
 	botToken := config.ReadEntry(cfg, "discord.bot_token", "<token>")
 	agentName := config.ReadEntry(cfg, "discord.agent_name", "Ceres")

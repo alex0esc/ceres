@@ -12,9 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/bwmarrin/discordgo"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -47,10 +45,9 @@ func getSubagents() map[string]handles.AgentHandle {
 // daemon is unreachable (e.g. Docker is not installed on this host) it logs a
 // warning and leaves the client nil, so Ceres still starts; sandbox tools then
 // report "not connected to docker daemon" per call.
-func InitDockerClient() error {
+func InitDockerClient(host string) error {
 	opts := []client.Opt{client.WithAPIVersionNegotiation()}
 
-	host := config.ReadEntry(tool.GetToolConfig(), "sandbox.docker_host", "")
 	if host != "" {
 		opts = append(opts, client.WithHost(host))
 	}

@@ -4,14 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/alex0esc/ceres/internal/constants"
-	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 )
-
-// Holds the global tool config
-var cfg *config.Config = nil
-
 
 // Holds all registered tools
 var registry = map[string]Tool{}
@@ -27,8 +21,6 @@ type Tool interface {
 	Parameters() map[string]any // JSON schema for OpenAI function calling
 	Handler() ToolHandler //handler wich executes the tool
 }
-
-
 
 func Register(t Tool) {
 	name := t.Name()
@@ -72,23 +64,4 @@ func Names() []string {
 		out = append(out, name)
 	}
 	return out
-}
-
-
-
-func LoadToolConfig() error {
-	conf, err := config.New(constants.ToolConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg = conf
-	return nil
-}
-
-
-func GetToolConfig() *config.Config {
-    if cfg == nil {
-        panic("tools: config not initialized.")
-    }
-    return cfg
 }

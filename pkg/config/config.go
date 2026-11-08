@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -8,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 type Config struct {
@@ -17,7 +18,7 @@ type Config struct {
 	data     map[string]any
 }
 
-// NewConfig loads the configuration file once at startup.
+// New loads the configuration file once at startup.
 func New(path string) (*Config, error) {
 	cfg := &Config{filePath: path}
 	if err := cfg.ensureFile(); err != nil {
@@ -29,79 +30,113 @@ func New(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// ReadConfigEntry reads a value using dot notation (e.g., "server.port").
-// If the key does not exist yet, defaultValue is written to the file.
-// Safe to call concurrently from multiple goroutines.
+// ReadEntry reads a value using dot notation (e.g., "server.port").
+// If the key does not exist yet, defaultValue is inserted into the file and
+// returned. Only the missing key is written; existing values, comments and
+// formatting are left untouched. Safe to call concurrently from multiple
+// goroutines.
+//
+// Invalid configuration is fatal: a type mismatch, an unreachable key path or
+// a failed write terminates the program instead of silently falling back to
+// the default, so the user sees the actual config error.
 func ReadEntry[T any](c *Config, key string, defaultValue T) T {
+	if c == nil {
+		log.Fatal("config: ReadEntry called before the config was initialized")
+	}
 	keys := strings.Split(key, ".")
-	c.mu.RLock()
-	val, found := getNestedValue(c.data, keys)
-	c.mu.RUnlock()
-	if !found {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		// Double-check: another goroutine might have written it already
-		// while we were waiting for the write lock.
-		if val, found = getNestedValue(c.data, keys); !found {
-			if c.data == nil {
-				c.data = make(map[string]any)
-			}
-			setNestedValue(c.data, keys, toStorable(defaultValue))
-			_ = c.save()
-			return defaultValue
+	for _, part := range keys {
+		if part == "" {
+			log.Fatalf("config %s: invalid key %q", c.filePath, key)
 		}
 	}
-	if casted, ok := convertType[T](val); ok {
-		return casted
+
+	c.mu.RLock()
+	val, found, err := lookupValue(c.data, keys)
+	c.mu.RUnlock()
+	if err != nil {
+		log.Fatalf("config %s: invalid key %q: %v", c.filePath, key, err)
+	}
+	if found {
+		return mustConvert(c, key, val, defaultValue)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Double-check: another goroutine might have inserted it already
+	// while we were waiting for the write lock.
+	if val, found, err = lookupValue(c.data, keys); err != nil {
+		log.Fatalf("config %s: invalid key %q: %v", c.filePath, key, err)
+	}
+	if found {
+		return mustConvert(c, key, val, defaultValue)
+	}
+
+	if c.data == nil {
+		c.data = make(map[string]any)
+	}
+	setNestedValue(c.data, keys, defaultValue)
+	if err := c.insertMissing(keys, defaultValue); err != nil {
+		log.Fatalf("config %s: failed to persist default for key %q: %v", c.filePath, key, err)
 	}
 	return defaultValue
 }
 
-// --- Internal Helper Functions ---
-
-func (c *Config) save() error {
-	f, err := os.Create(c.filePath)
+func mustConvert[T any](c *Config, key string, val any, defaultValue T) T {
+	converted, err := convertType[T](val)
 	if err != nil {
-		return err
+		log.Fatalf("config %s: value of key %q has the wrong type (%T, expected %T): %v",
+			c.filePath, key, val, defaultValue, err)
 	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(c.data)
+	return converted
 }
 
 func (c *Config) ensureFile() error {
-	if _, err := os.Stat(c.filePath); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(c.filePath), 0755); err != nil {
-			return err
-		}
-		return os.WriteFile(c.filePath, []byte("# Dynamic TOML Config\n"), 0644)
+	_, err := os.Stat(c.filePath)
+	switch {
+	case err == nil:
+		return nil
+	case !os.IsNotExist(err):
+		return err
 	}
-	return nil
+	if err := os.MkdirAll(filepath.Dir(c.filePath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(c.filePath, nil, 0o644)
 }
 
 func (c *Config) load() error {
+	raw, err := os.ReadFile(c.filePath)
+	if err != nil {
+		return err
+	}
 	var data map[string]any
-	if _, err := toml.DecodeFile(c.filePath, &data); err != nil {
+	if err := toml.Unmarshal(raw, &data); err != nil {
 		return err
 	}
 	c.data = data
 	return nil
 }
 
-func getNestedValue(m map[string]any, keys []string) (any, bool) {
+// lookupValue walks a dotted key path. It reports whether the key exists and
+// fails when an intermediate value is not a table (e.g. "agent" is a string
+// but "agent.description" was requested).
+func lookupValue(m map[string]any, keys []string) (any, bool, error) {
 	if len(keys) == 0 || m == nil {
-		return nil, false
+		return nil, false, nil
 	}
 	val, exists := m[keys[0]]
 	if !exists {
-		return nil, false
+		return nil, false, nil
 	}
 	if len(keys) == 1 {
-		return val, true
+		return val, true, nil
 	}
-	if nestedMap, ok := val.(map[string]any); ok {
-		return getNestedValue(nestedMap, keys[1:])
+	nested, ok := val.(map[string]any)
+	if !ok {
+		return nil, false, fmt.Errorf("key %q is not a table but %T", keys[0], val)
 	}
-	return nil, false
+	return lookupValue(nested, keys[1:])
 }
 
 func setNestedValue(m map[string]any, keys []string, value any) {
@@ -122,54 +157,56 @@ func setNestedValue(m map[string]any, keys []string, value any) {
 	}
 }
 
-// toStorable converts a default value into a TOML-friendly representation
-// before it gets written to disk for the first time. Without this, types
-// like time.Duration would be written as their raw int64 (nanoseconds)
-// instead of the human-readable string form that convertType expects to
-// read back in.
-func toStorable(value any) any {
-	switch v := value.(type) {
-	case time.Duration:
-		return v.String() // e.g. "10m0s" - the inverse of time.ParseDuration
-	default:
-		return value
+// convertType converts a decoded TOML value into T. go-toml already knows all
+// TOML representations (ints, floats, times, tables, arrays of tables), so a
+// TOML round-trip handles every supported type. time.Duration is special: TOML
+// stores it as a human readable string ("2m0s"), which go-toml does not map
+// back to time.Duration on its own.
+func convertType[T any](val any) (T, error) {
+	if v, ok := val.(T); ok {
+		return v, nil
 	}
+	var zero T
+
+	if _, isDuration := any(zero).(time.Duration); isDuration {
+		d, err := toDuration(val)
+		if err != nil {
+			return zero, err
+		}
+		return any(d).(T), nil
+	}
+
+	data, err := toml.Marshal(struct {
+		Value any `toml:"value"`
+	}{Value: val})
+	if err != nil {
+		return zero, err
+	}
+	var out struct {
+		Value T `toml:"value"`
+	}
+	if err := toml.Unmarshal(data, &out); err != nil {
+		return zero, err
+	}
+	return out.Value, nil
 }
 
-func convertType[T any](val any) (T, bool) {
-	var zero T
-	if v, ok := val.(T); ok {
-		return v, true
-	}
-	switch any(zero).(type) {
-	case int:
-		if v, ok := val.(int64); ok {
-			return any(int(v)).(T), true
-		}
-	case float64:
-		if v, ok := val.(int64); ok {
-			return any(float64(v)).(T), true
-		}
+// toDuration converts a decoded TOML value into a time.Duration. Durations are
+// written as strings ("2m0s"), but plain integers (nanoseconds) are accepted as
+// well so hand-edited files keep working.
+func toDuration(val any) (time.Duration, error) {
+	switch v := val.(type) {
 	case time.Duration:
-		if s, ok := val.(string); ok {
-			d, err := time.ParseDuration(s)
-			if err != nil {
-				log.Fatalf("config: invalid duration %q: %v", s, err)
-			}
-			return any(d).(T), true
-		}
-	case []string:
-		if rawSlice, ok := val.([]any); ok {
-			strSlice := make([]string, 0, len(rawSlice))
-			for _, item := range rawSlice {
-				if str, ok := item.(string); ok {
-					strSlice = append(strSlice, str)
-				} else {
-					return zero, false
-				}
-			}
-			return any(strSlice).(T), true
-		}
+		return v, nil
+	case string:
+		return time.ParseDuration(v)
+	case int64:
+		return time.Duration(v), nil
+	case int:
+		return time.Duration(v), nil
+	case float64:
+		return time.Duration(v), nil
+	default:
+		return 0, fmt.Errorf("cannot convert %T to time.Duration", val)
 	}
-	return zero, false
 }

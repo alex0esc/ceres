@@ -6,6 +6,7 @@ import (
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/app"
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textarea"
@@ -95,7 +96,7 @@ func newTextArea() textarea.Model {
 }
 
 func initialTui() (*Tui, error) {
-	timeout := config.ReadEntry(app.GetAppConfig(), "tui.message_timeout", time.Minute * 60)
+	timeout := config.ReadEntry(appconfig.Get(), "tui.message_timeout", time.Minute * 60)
 
 	return &Tui{
 		textarea:     newTextArea(),
@@ -105,7 +106,7 @@ func initialTui() (*Tui, error) {
 		inputChan: make(chan history.Token, 1024),
 		selectedAgent: nil,
 		messageTimeout: timeout,
-		showReasoning: config.ReadEntry(app.GetAppConfig(), "tui.show_reasoning", true),
+		showReasoning: config.ReadEntry(appconfig.Get(), "tui.show_reasoning", true),
 	}, nil
 }
 

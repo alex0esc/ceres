@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -29,7 +30,7 @@ type SearxngTool struct {
 // NewSearxngTool constructs a SearxngTool, reading all relevant config
 // values once up front.
 func NewSearxngTool() *SearxngTool {
-	baseURL := config.ReadEntry(tool.GetToolConfig(), "searxng.url", "http://localhost:8080")
+	baseURL := config.ReadEntry(appconfig.Get(), "tool_settings.searxng.url", "http://localhost:8080")
 
 	return &SearxngTool{
 		baseURL: baseURL,

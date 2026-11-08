@@ -10,8 +10,6 @@ const TasksDirectoryPath = "tasks/"
 const LogFilePath = "logs/log.txt"
 const WakeupConfigPath = "config/wakeups.toml"
 const EndpointsConfigPath = "config/endpoints.toml"
-const ToolConfigPath = "config/toolconfig.toml"
-const PlatformConfigPath = "config/platformconfig.toml"
 const AppConfigPath = "config/appconfig.toml"
 
 // AgentDatabaseDir is the data folder of one agent: database/<agent name>/.

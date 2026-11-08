@@ -15,8 +15,10 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/alex0esc/ceres/internal/tools"
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/command"
 	"github.com/alex0esc/ceres/pkg/config"
+	"github.com/alex0esc/ceres/pkg/extensions"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/platform"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -30,7 +32,8 @@ func  Start() error {
 	}
 
 	initSubagentTool()
-	err = tools.InitDockerClient()
+	dockerHost := config.ReadEntry(inference.GetEndpointsConfig(), "sandbox.docker_host", "")
+	err = tools.InitDockerClient(dockerHost)
 	if err != nil {
 		return err
 	}
@@ -66,7 +69,7 @@ func Shutdown() {
 	for _, agnt := range agents {
 		agnt.Stop()
 	}
-	for _, plat := range config.ReadEntry(cfg, "active_platforms", []string{}) {
+	for _, plat := range config.ReadEntry(appconfig.Get(), "active_platforms", []string{}) {
 		platform.Get(plat).StopListen()
 	}
 	if cronLib != nil {
@@ -77,7 +80,6 @@ func Shutdown() {
 	endpoints = nil
 	agents = nil
 	cronLib = nil
-	cfg = nil
 	wakeup.DbCloseAll()
 	history.StorageCloseAll()
 	tool.ClearRegistry()
@@ -87,36 +89,24 @@ func Shutdown() {
 
 
 func loadConfigs() error {
+	if err := appconfig.Load(constants.AppConfigPath); err != nil {
+		return fmt.Errorf("error loading app config: %v", err)
+	}
+
 	var err error
-	cfg, err = config.New(constants.AppConfigPath)
-	if err != nil {
-		return fmt.Errorf("error loading server config: %v", err)
-	}
-
-	err = tool.LoadToolConfig()
-	if err != nil {
-		return fmt.Errorf("error loading tool config: %v", err)
-	}
-
-	err = platform.LoadPlatformConfig()
-	if err != nil {
-		return fmt.Errorf("error loading platform config: %v", err)
-	}
-
 	endpoints, err = inference.LoadEndpointsFromConfig()
 	if err != nil {
 		return fmt.Errorf("error reading endpoints config: %v", err)
 	}	
 	
 	registerInternalTools()
-	err = tool.RegisterExternal()
-	if err != nil {
-		return fmt.Errorf("error registering external tool: %v", err)
+	if err := extensions.Register(); err != nil {
+		return fmt.Errorf("error registering external tools: %v", err)
 	}
 
-	zone, err := time.LoadLocation(config.ReadEntry(tool.GetToolConfig(), "timezone", "Local"))
+	zone, err := time.LoadLocation(config.ReadEntry(appconfig.Get(), "timezone", "Local"))
 	if err != nil {
-		return fmt.Errorf("invalid timezone in toolconfig")
+		return fmt.Errorf("invalid timezone in app config")
 	}
 	cronLib = cron.New(cron.WithLocation(zone))
 
@@ -193,7 +183,7 @@ func initSubagentTool() {
 
 // initializes platforms
 func initPlatforms() {
-	for _, name := range config.ReadEntry(cfg, "active_platforms", []string{}) {
+	for _, name := range config.ReadEntry(appconfig.Get(), "active_platforms", []string{}) {
 		plat := platform.Get(name)	
 		go plat.Listen(GetAgent(plat.AgentName()))
 	}

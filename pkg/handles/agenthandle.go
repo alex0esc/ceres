@@ -5,6 +5,7 @@ import (
 
 	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/internal/wakeup"
+	"github.com/alex0esc/ceres/pkg/config"
 )
 
 type AgentState int
@@ -51,4 +52,5 @@ type AgentHandle interface {
 	CurrentTask() *task.Task
 	WakeupManager() *wakeup.Manager
 	SandboxContainer() string
+	Config() *config.Config
 }

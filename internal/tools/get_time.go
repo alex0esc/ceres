@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -26,11 +27,11 @@ type GetTimeTool struct {
 // from the tool config once up front. Falls back to UTC if the configured
 // value is empty or invalid.
 func NewGetTimeTool() GetTimeTool {
-	tzName := config.ReadEntry(tool.GetToolConfig(), "timezone", "Local")
+	tzName := config.ReadEntry(appconfig.Get(), "timezone", "Local")
 
 	loc, err := time.LoadLocation(tzName)
 	if err != nil {
-		log.Fatalf("get_time: invalid timezone %q in tool config: %v", tzName, err)
+		log.Fatalf("get_time: invalid timezone %q in app config: %v", tzName, err)
 	}
 
 	return GetTimeTool{

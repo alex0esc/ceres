@@ -17,33 +17,25 @@ import (
 
 // SubagentCallTool lets an agent delegate tasks to subagents and wait for their responses.
 // Multiple tasks can be submitted and run in parallel.
-type SubagentCallTool struct {
-	timeout time.Duration
-}
+type SubagentCallTool struct{}
 
-// NewSubagentCallTool constructs a SubagentCallTool, reading the timeout config up front.
+// NewSubagentCallTool constructs a SubagentCallTool. The timeout is configured
+// per agent and read in the handler.
 func NewSubagentCallTool() *SubagentCallTool {
-	cfg := tool.GetToolConfig()
-	timeout := config.ReadEntry(cfg, "subagent.timeout", time.Hour*1)
-
-	return &SubagentCallTool{
-		timeout: timeout,
-	}
+	return &SubagentCallTool{}
 }
 
 func (t *SubagentCallTool) Name() string {
 	return "subagent_call"
 }
 
-func (t *SubagentCallTool) Description() string {
-	return fmt.Sprintf("Delegate tasks to subagents and wait for their responses. "+
-		"Submit one or more tasks to run in parallel. Each task specifies which subagent should execute it and the prompt to send. "+
-		"Tasks are fully independent - include all necessary context in each prompt, as subagents have no memory of other tasks or conversations. "+
-		"A busy subagent queues the task. Timeout per task is %s. "+
-		"You receive the subagent's final response message - not its intermediate steps or tool calls. "+
-		"Use subagent_list first to see available subagents.",
-		t.timeout.String(),
-	)
+func (SubagentCallTool) Description() string {
+	return "Delegate tasks to subagents and wait for their responses. " +
+		"Submit one or more tasks to run in parallel. Each task specifies which subagent should execute it and the prompt to send. " +
+		"Tasks are fully independent - include all necessary context in each prompt, as subagents have no memory of other tasks or conversations. " +
+		"A busy subagent queues the task. The timeout per task is configured per agent (tool_settings.subagent.timeout). " +
+		"You receive the subagent's final response message - not its intermediate steps or tool calls. " +
+		"Use subagent_list first to see available subagents."
 }
 
 func (t *SubagentCallTool) Parameters() map[string]any {
@@ -117,6 +109,7 @@ func (t *SubagentCallTool) callSubagents(ctx context.Context, tasks []subagentTa
 	var wg sync.WaitGroup
 
 	subagents := getSubagents()
+	timeout := config.ReadEntry(handle.Config(), "tool_settings.subagent.timeout", time.Hour)
 
 	for i, tsk := range tasks {
 		wg.Add(1)
@@ -146,7 +139,7 @@ func (t *SubagentCallTool) callSubagents(ctx context.Context, tasks []subagentTa
 			// Build the task - ClearAsk so it starts fresh and only returns the final response
 			subTask := task.TaskClearAskMultiple(  // <-- "task" ist jetzt wieder das Package
 				[]task.Prompt{{Text: prompt}},
-				t.timeout,
+				timeout,
 			)
 			subTask.ParentCtx = ctx
 
