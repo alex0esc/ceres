@@ -18,33 +18,21 @@ import (
 
 // ViewImageTool reads an image from the sandbox container and appends it
 // to the agent's chat history as a base64-encoded image.
-type ViewImageTool struct {
-	maxSize int64
-}
+type ViewImageTool struct{}
 
-// NewViewImageTool constructs a ViewImageTool, reading all relevant config
-// values once up front.
+// NewViewImageTool constructs a ViewImageTool. The maximum image size is
+// configured per agent and read in the handler.
 func NewViewImageTool() ViewImageTool {
-	cfg := tool.GetToolConfig()
-
-	var defSize int64 = 8192
-	maxSize := config.ReadEntry(cfg, "view_image.max_size_kb", defSize) * 1024
-
-	return ViewImageTool{
-		maxSize: maxSize,
-	}
+	return ViewImageTool{}
 }
 
 func (ViewImageTool) Name() string {
 	return "view_image"
 }
 
-func (t ViewImageTool) Description() string {
-	return fmt.Sprintf(
-		"Reads an image from the sandbox container and appends it as user message in the chat.\n"+
-			"The path may be absolute or relative to the sandbox working directory. Images larger than %d bytes are rejected.",
-		t.maxSize,
-	)
+func (ViewImageTool) Description() string {
+	return "Reads an image from the sandbox container and appends it as user message in the chat.\n" +
+		"The path may be absolute or relative to the sandbox working directory. A maximum image size applies, configured per agent (tool_settings.view_image.max_size_kb)."
 }
 
 func (ViewImageTool) Parameters() map[string]any {
@@ -61,7 +49,7 @@ func (ViewImageTool) Parameters() map[string]any {
 	}
 }
 
-func (t ViewImageTool) Handler() tool.ToolHandler {
+func (ViewImageTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		var args struct {
 			Path string `json:"path"`
@@ -75,7 +63,10 @@ func (t ViewImageTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("view_image: path must not be empty")
 		}
 
-		imageData, size, err := readFileFromContainer(ctx, handle.SandboxContainer(), sandboxOpTimeout, t.maxSize, args.Path)
+		var defSize int64 = 8192
+		maxSize := config.ReadEntry(handle.Config(), "tool_settings.view_image.max_size_kb", defSize) * 1024
+
+		imageData, size, err := readFileFromContainer(ctx, handle.SandboxContainer(), sandboxOpTimeout, maxSize, args.Path)
 		if err != nil {
 			return "", fmt.Errorf("view_image: %w", err)
 		}

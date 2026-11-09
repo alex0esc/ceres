@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -29,10 +30,10 @@ type WebExtractTool struct {
 // NewWebExtractTool constructs a WebExtractTool, reading all relevant
 // config values once up front.
 func NewWebExtractTool() *WebExtractTool {
-	cfg := tool.GetToolConfig()
+	cfg := appconfig.Get()
 
-	apiKey := config.ReadEntry(cfg, "firecrawl.api_key", "")
-	baseURL := strings.TrimRight(config.ReadEntry(cfg, "firecrawl.url", "http://localhost:3002"), "/")
+	apiKey := config.ReadEntry(cfg, "tool_settings.firecrawl.api_key", "")
+	baseURL := strings.TrimRight(config.ReadEntry(cfg, "tool_settings.firecrawl.url", "http://localhost:3002"), "/")
 
 	return &WebExtractTool{
 		apiKey:  apiKey,

@@ -9,36 +9,26 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/wakeup"
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
 )
 
-// WakeupAddTool lets an agent create new scheduled wakeups.
-// Whether it may create recurring (cron-based) wakeups is controlled via config.
-// The timeout for wakeups is controlled by the user via configuration and cannot be chosen by the agent.
+// WakeupAddTool lets an agent create new scheduled wakeups. Whether it may
+// create recurring (cron-based) wakeups, the wakeup timeout, and whether the
+// wakeup keeps the conversation history are configured per agent.
 type WakeupAddTool struct {
-	canCreateRepeatable bool
-	defaultTzName       string
-	timeout             time.Duration
-	clearHistory        bool
+	defaultTzName string
 }
 
-// NewWakeupAddTool constructs a WakeupAddTool, reading all relevant config values once up front.
+// NewWakeupAddTool constructs a WakeupAddTool. The timezone is global
+// (app config); the per-agent values are read in the handler.
 func NewWakeupAddTool() WakeupAddTool {
-	cfg := tool.GetToolConfig()
-
-	tzName := config.ReadEntry(cfg, "timezone", "Local")
-	canCreateRepeatable := config.ReadEntry(cfg, "wakeup.can_create_repeatable", false)
-	timeout := config.ReadEntry(cfg, "wakeup.timeout", time.Hour)
-	clearHistory := config.ReadEntry(cfg, "wakeup.clear_history", true)
-
+	tzName := config.ReadEntry(appconfig.Get(), "timezone", "Local")
 
 	return WakeupAddTool{
-		canCreateRepeatable: canCreateRepeatable,
-		defaultTzName:       tzName,
-		timeout:             timeout,
-		clearHistory:        clearHistory,
+		defaultTzName: tzName,
 	}
 }
 
@@ -47,24 +37,13 @@ func (WakeupAddTool) Name() string {
 }
 
 func (t WakeupAddTool) Description() string {
-	repeatNote := "You are not permitted to create recurring wakeups; only fire_at may be used, cron_spec must be empty."
-	if t.canCreateRepeatable {
-		repeatNote = "You may create both one-shot (fire_at) and recurring (cron_spec) wakeups. Exactly one must be set."
-	}
-
-	contextNote := "The wakeup starts with a completely fresh context - no memory of current conversation or other wakeups. The prompt must be fully self-contained with all context, goal, constraints, and expected result."
-	if !t.clearHistory {
-		contextNote = "The wakeup keeps the agent's existing conversation history, allowing it to build on previous context. The prompt can reference earlier conversations and decisions."
-	}
-
 	return fmt.Sprintf("Create a new scheduled wakeup for this agent. Use wakeup_list first to see existing wakeups and avoid name conflicts. "+
 		"Required: name (unique), description, a prompt, and exactly one of fire_at or cron_spec. "+
-		"%s "+
-		"Timeout is %s (controlled by user, cannot be changed). Always use %s timezone for fire_at. %s",
-		contextNote,
-		t.timeout.String(),
+		"Recurring wakeups can be disabled per agent (tool_settings.wakeup.can_create_repeatable); when disabled, only fire_at may be used and cron_spec must be empty. "+
+		"Whether the wakeup starts with a fresh context or keeps the conversation history is configured per agent (tool_settings.wakeup.clear_history); when the history is cleared, the prompt must be fully self-contained with all context, goal, constraints, and expected result. "+
+		"The wakeup timeout is configured per agent (tool_settings.wakeup.timeout) and cannot be changed via arguments. "+
+		"Always use %s timezone for fire_at.",
 		t.defaultTzName,
-		repeatNote,
 	)
 }
 
@@ -106,6 +85,11 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 			return "", fmt.Errorf("wakeup_add: agent handle is nil")
 		}
 
+		cfg := handle.Config()
+		canCreateRepeatable := config.ReadEntry(cfg, "tool_settings.wakeup.can_create_repeatable", false)
+		wakeupTimeout := config.ReadEntry(cfg, "tool_settings.wakeup.timeout", time.Hour)
+		clearHistory := config.ReadEntry(cfg, "tool_settings.wakeup.clear_history", true)
+
 		var args struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
@@ -139,8 +123,8 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 		if hasFireAt == hasCron {
 			return "", fmt.Errorf("wakeup_add: exactly one of fire_at or cron_spec must be set")
 		}
-		if hasCron && !t.canCreateRepeatable {
-			return "", fmt.Errorf("wakeup_add: this agent is not allowed to create recurring wakeups")
+		if hasCron && !canCreateRepeatable {
+			return "", fmt.Errorf("wakeup_add: creating repeatable wakeups is disabled for this agent (tool_settings.wakeup.can_create_repeatable)")
 		}
 
 		var fireAt *time.Time
@@ -162,8 +146,8 @@ func (t WakeupAddTool) Handler() tool.ToolHandler {
 			fireAt,
 			cronSpec,
 			prompt,
-			t.timeout,
-			t.clearHistory,
+			wakeupTimeout,
+			clearHistory,
 		)
 		switch {
 		case errors.Is(err, wakeup.ErrExists):

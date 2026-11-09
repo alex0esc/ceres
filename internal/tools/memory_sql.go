@@ -57,20 +57,12 @@ var (
 			sqlQuoteOpen + catalogTable + sqlQuoteClose)
 )
 
-type MemorySQLTool struct {
-	maxRows    int
-	maxColumns int
-}
+type MemorySQLTool struct{}
 
-// NewMemorySQLTool constructs a MemorySQLTool, reading the relevant config
-// values once up front.
+// NewMemorySQLTool constructs a MemorySQLTool. The result limits are configured
+// per agent and read in the handler.
 func NewMemorySQLTool() MemorySQLTool {
-	cfg := tool.GetToolConfig()
-
-	return MemorySQLTool{
-		maxRows:    config.ReadEntry(cfg, "memory_sql.max_rows", 100),
-		maxColumns: config.ReadEntry(cfg, "memory_sql.max_columns", 50),
-	}
+	return MemorySQLTool{}
 }
 
 func (MemorySQLTool) Name() string {
@@ -95,7 +87,8 @@ func (MemorySQLTool) Description() string {
 		"Upsert a catalog entry with: INSERT INTO table_catalog(table_name, description) VALUES ('my_table', 'what it stores and why') " +
 		"ON CONFLICT(table_name) DO UPDATE SET description = excluded.description, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'). " +
 		"Escape single quotes in strings by doubling them (it''s). Never use double quotes for string literals. " +
-		"ATTACH, DETACH, PRAGMA, VACUUM and LOAD_EXTENSION statements are forbidden."
+		"ATTACH, DETACH, PRAGMA, VACUUM and LOAD_EXTENSION statements are forbidden. " +
+		"Result sets are truncated based on per-agent limits (tool_settings.memory_sql.max_rows, tool_settings.memory_sql.max_columns)."
 }
 
 func (MemorySQLTool) Parameters() map[string]any {
@@ -112,13 +105,16 @@ func (MemorySQLTool) Parameters() map[string]any {
 	}
 }
 
-func (m MemorySQLTool) Handler() tool.ToolHandler {
+func (MemorySQLTool) Handler() tool.ToolHandler {
 	return func(ctx context.Context, argumentsJSON string, handle handles.AgentHandle) (string, error) {
 		agentName := strings.TrimSpace(handle.Name())
 		if agentName == "" {
 			return "", fmt.Errorf("memory_sql: agent handle returned empty name")
 		}
 		dbPath := constants.AgentMemoriesDBPath(agentName)
+
+		maxRows := config.ReadEntry(handle.Config(), "tool_settings.memory_sql.max_rows", 100)
+		maxColumns := config.ReadEntry(handle.Config(), "tool_settings.memory_sql.max_columns", 50)
 
 		var args struct {
 			SQL string `json:"sql"`
@@ -142,7 +138,7 @@ func (m MemorySQLTool) Handler() tool.ToolHandler {
 		}
 		defer db.Close()
 
-		return m.memorySQLExecute(ctx, db, args.SQL)
+		return memorySQLExecute(ctx, db, args.SQL, maxRows, maxColumns)
 	}
 }
 
@@ -286,9 +282,9 @@ func isSelectQuery(sql string) bool {
 		strings.HasPrefix(s, "EXPLAIN")
 }
 
-func (m MemorySQLTool) memorySQLExecute(ctx context.Context, db *memoryDB, query string) (string, error) {
+func memorySQLExecute(ctx context.Context, db *memoryDB, query string, maxRows, maxColumns int) (string, error) {
 	if isSelectQuery(query) {
-		res, err := memorySQLSelect(ctx, db.ro, m.maxRows, m.maxColumns, query)
+		res, err := memorySQLSelect(ctx, db.ro, maxRows, maxColumns, query)
 		if err != nil {
 			return "", fmt.Errorf("memory_sql: query failed: %w", err)
 		}

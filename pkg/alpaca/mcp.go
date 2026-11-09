@@ -1,4 +1,4 @@
-package tool
+package alpaca
 
 import (
 	"context"
@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
+	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -17,20 +19,20 @@ type mcpToolAdapter struct {
 	name        string
 	description string
 	parameters  map[string]any
-	handler     ToolHandler
+	handler     tool.ToolHandler
 }
 
 func (m *mcpToolAdapter) Name() string               { return m.name }
 func (m *mcpToolAdapter) Description() string        { return m.description }
 func (m *mcpToolAdapter) Parameters() map[string]any { return m.parameters }
-func (m *mcpToolAdapter) Handler() ToolHandler       { return m.handler }
+func (m *mcpToolAdapter) Handler() tool.ToolHandler       { return m.handler }
 
 // RegisterAlpacaMCPToolsOfficial registers the Alpaca MCP Server 
 // directly into your registry using the official SDK.
-func registerAlpacaMcpTools(ctx context.Context) error {
+func RegisterMcpTools(ctx context.Context) error {
 
 	paperStr := "true"
-	if !config.ReadEntry(GetToolConfig(), "alpaca.paper_trade", true) {
+	if !config.ReadEntry(appconfig.Get(), "alpaca.paper_trade", true) {
 		paperStr = "false"
 	}
 
@@ -43,8 +45,8 @@ func registerAlpacaMcpTools(ctx context.Context) error {
 	// 2. Set up CommandTransport with environment variables
 	cmd := exec.Command("uvx", "alpaca-mcp-server", "serve")
 	cmd.Env = append(os.Environ(),
-		"ALPACA_API_KEY=" + config.ReadEntry(GetToolConfig(), "alpaca.alpaca_api_key", "<my_api_key>"),
-		"ALPACA_SECRET_KEY=" + config.ReadEntry(GetToolConfig(), "alpaca.alpaca_secret_key", "<my_secret_key>"),
+		"ALPACA_API_KEY=" + config.ReadEntry(appconfig.Get(), "alpaca.alpaca_api_key", "<my_api_key>"),
+		"ALPACA_SECRET_KEY=" + config.ReadEntry(appconfig.Get(), "alpaca.alpaca_secret_key", "<my_secret_key>"),
 		"ALPACA_PAPER_TRADE=" + paperStr,
 	)
 
@@ -73,7 +75,7 @@ func registerAlpacaMcpTools(ctx context.Context) error {
 			}
 		}
 
-		Register(&mcpToolAdapter{
+		tool.Register(&mcpToolAdapter{
 			name:        mcpToolName,
 			description: t.Description,
 			parameters:  paramsMap,

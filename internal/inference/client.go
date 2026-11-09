@@ -51,22 +51,23 @@ type Client struct {
 }
 
 
+// NewClient creates a client for the given endpoint and model. Only the endpoint
+// and the model name are required; everything else gets a sensible default.
 func NewClient(endpoint *Endpoint, modelName string) *Client {
 	return &Client{
-		modelName:         modelName,
-		ReasoningEffort:   responses.ReasoningEffortNone,
-		SystemPrompt:      "Your are Ceres a helpful AI assistant.",
-		MaxToolIterations: 100,
-		MaxToolResultChars: 100000,
-		endpoint: endpoint,
+		endpoint:             endpoint,
+		modelName:            modelName,
+		ReasoningEffort:      responses.ReasoningEffortNone,
+		SystemPrompt:         "Your are Ceres a helpful AI assistant.",
+		MaxToolIterations:    100,
+		MaxToolResultChars:   100000,
 		CompressionThreshold: 200000,
+		NumMessagesToKeep:    8,
 		CompressionPrompt: "This is a message injected by the system, your task is to compress the current chat. " +
-						   "Dont ask any question, do the summary in this turn and keep everything that is relevant.",
-		NumMessagesToKeep: 8,
+			"Dont ask any question, do the summary in this turn and keep everything that is relevant.",
 		tools: make(map[string]tool.Tool),
 	}
 }
-
 
 // executes all items found in a response output in their original order:
 // message-text items are appended to the history as assistant turns,

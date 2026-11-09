@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/alex0esc/ceres/pkg/appconfig"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
-	"github.com/alex0esc/ceres/pkg/platform"
 	"github.com/alex0esc/ceres/pkg/tool"
 	"github.com/bwmarrin/discordgo"
 )
@@ -30,16 +30,14 @@ type DiscordMsgTool struct {
 // NewDiscordMsgTool constructs a DiscordMsgTool, reading all relevant config
 // values once up front and creating its own discordgo session.
 func NewDiscordMsgTool() *DiscordMsgTool {
-	cfg := platform.GetPlatformConfig()
+	cfg := appconfig.Get()
 
 	botToken := config.ReadEntry(cfg, "discord.bot_token", "<token>")
 	guildID := config.ReadEntry(cfg, "discord.guild_id", "<guild_id>")
 	userID := config.ReadEntry(cfg, "discord.user_id", "<id>")
 
-	toolCfg := tool.GetToolConfig()
-
 	var defSize int64 = 8192
-	maxFileSize := config.ReadEntry(toolCfg, "discord.max_file_size_kb", defSize) * 1024
+	maxFileSize := config.ReadEntry(cfg, "tool_settings.discord.max_file_size_kb", defSize) * 1024
 
 	session, err := discordgo.New("Bot " + botToken)
 	if err != nil {
