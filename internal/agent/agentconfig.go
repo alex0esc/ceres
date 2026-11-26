@@ -95,7 +95,7 @@ func loadAgentFromFile(path string, endpoints map[string]inference.Endpoint, cro
 			slog.Warn("failed to load persisted history, starting with empty history", "agent", name, "error", err)
 			loadedHistory = history.History{}
 		}
-		client.History = loadedHistory
+		client.ReplaceHistory(loadedHistory)
 
 		agnt, err := NewAgent(name, description, sandboxContainer, client, subagent, cfg, cronLib)
 		if err != nil {

@@ -30,11 +30,12 @@ func (client *Client) RegisterTool(t tool.Tool) {
 }
 
 // resets the chat history of the client
-func (client *Client) ClearHistory() {
-	client.History = history.History{}
-	client.triggerOnEvent(history.Token{Type: history.TokenTypeResetChat})
+func (client *Client) ReplaceHistory(hist history.History) {
+	client.mutex.Lock()
+	client.history = hist
+	client.publishLocked(history.Token{Type: history.TokenTypeResetChat})
+	client.mutex.Unlock()
 }
-
 
 // interrupts the client while streaming and tells the modell
 func (client *Client) Interrupt() {
@@ -47,70 +48,13 @@ func (client *Client) Interrupt() {
 }
 
 
-// managing the event callback
-func (client *Client) SetOnEvent(fn func(history.Token)) {
-    client.mutex.Lock()
-    defer client.mutex.Unlock()
-    client.onEvent = fn
+// TotalTokens returns the current token usage of the history.
+func (c *Client) TotalTokens() int64 {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.history.TotalTokens
 }
 
-
-// streams the tokens currently in the pipeline instantly
-func (client *Client) CatchUpOnEvent() {
-	client.mutex.Lock()
-	defer client.mutex.Unlock()
-	if client.onEvent == nil {
-		return
-	}
-	tokens := make([]history.Token, len(client.partialAnswer))
-	copy(tokens, client.partialAnswer)
-	onEvent := client.onEvent
-
-	go func() {
-		for _, token := range tokens {
-			onEvent(token)
-		}
-	}()
-}
-
-
-func (client *Client) triggerOnEvent(token history.Token) {
-    client.mutex.Lock()
-    defer client.mutex.Unlock()
-    if client.onEvent == nil {
-    	return
-    }
-	client.onEvent(token)
-}
-
-func (client *Client) ClearOnEvent() {
-	client.mutex.Lock()
-	defer client.mutex.Unlock()
-	client.onEvent = nil
-}
-
-
-
-func (client *Client) appendAssistantMessage(promt string) {
-	client.History.Push(history.Entry{Type: history.EntryTypeAssistant, Text: promt})
-}
-
-
-// appendReasoningItem stores a reasoning item losslessly (id + encrypted_content
-// + summary/content) so it can be replayed to reasoning-mode backends.
-func (client *Client) appendReasoningItem(item responses.ResponseReasoningItem) {
-	r := &history.Reasoning{
-		ID:               item.ID,
-		EncryptedContent: item.EncryptedContent,
-	}
-	for _, si := range item.Summary {
-		r.Summary = append(r.Summary, si.Text)
-	}
-	for _, ci := range item.Content {
-		r.Content = append(r.Content, ci.Text)
-	}
-	client.History.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
-}
 
 
 func generateReasoningID() string {
@@ -119,21 +63,6 @@ func generateReasoningID() string {
 		return "rs_fallback"
 	}
 	return "rs_" + hex.EncodeToString(b)
-}
-
-
-func (client *Client) appendReasoningText(text string) {
-	if text == "" {
-		return
-	}
-
-	r := &history.Reasoning{ID: generateReasoningID()}
-	if client.UseReasoningSummary {
-		r.Summary = []string{text}
-	} else {
-		r.Content = []string{text}
-	}
-	client.History.Push(history.Entry{Type: history.EntryTypeReasoning, Reasoning: r})
 }
 
 
@@ -155,17 +84,19 @@ func (client *Client) AppendUserPrompt(prompt task.Prompt) {
 		hasImage = true
 	}
 
-	client.History.Push(entry)
+	client.mutex.Lock()
+	client.history.Push(entry)
 
 	if hasImage {
-		client.triggerOnEvent(history.Token{Type: history.EntryTypeImage, Images: append([]history.Image(nil), entry.Images...)})
+		client.publishLocked(history.Token{Type: history.EntryTypeImage, Images: append([]history.Image(nil), entry.Images...)})
 		// separate the image from the text so the TUI renders them as two messages
-		client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
+		client.publishLocked(history.Token{Type: history.TokenTypeEndOfSequence})
 	}
 	if prompt.Text != "" {
-		client.triggerOnEvent(history.Token{Type: history.EntryTypeUser, Text: prompt.Text})
+		client.publishLocked(history.Token{Type: history.EntryTypeUser, Text: prompt.Text})
 	}
-	client.triggerOnEvent(history.Token{Type: history.TokenTypeEndOfSequence})
+	client.publishLocked(history.Token{Type: history.TokenTypeEndOfSequence})
+	client.mutex.Unlock()
 }
 
 

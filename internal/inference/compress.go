@@ -13,7 +13,11 @@ import (
 // CompressHistory compresses older messages in the history when total token count exceeds limits.
 // HINT do not execute this at the same time if another AskStream call or CompressHistory call is running
 func (client *Client) CompressHistory(ctx context.Context) error {
-	totalMessages := len(client.History.Entries)
+	client.mutex.Lock()
+	entries := append([]history.Entry(nil), client.history.Entries...)
+	client.mutex.Unlock()
+
+	totalMessages := len(entries)
 
 	// Return early if there are not enough messages to trigger compression
 	if totalMessages <= client.NumMessagesToKeep {
@@ -35,20 +39,22 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 			client.mutex.Unlock()
 		}()		
 	}
+	client.mutex.Unlock()
 
+	client.mutex.Lock()
 	client.isCompressing = true
+	client.mutex.Unlock()
 	defer func() {
 		client.mutex.Lock()
 		client.isCompressing = false
 		client.mutex.Unlock()
 	}()
-	client.mutex.Unlock()
 
 	
 
 	cutoff := totalMessages - client.NumMessagesToKeep
-	toCompress := client.History.Entries[:cutoff]
-	toKeep := client.History.Entries[cutoff:]
+	toCompress := entries[:cutoff]
+	toKeep := entries[cutoff:]
 
 	if client.CompressionPrompt == "" {
 		return fmt.Errorf("There is no compression promt given for the client with model %s", client.modelName)
@@ -122,13 +128,13 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summaryStr})
 	newHistory = append(newHistory, toKeep...)
 
-	// Replace the history; TotalTokens (now part of the history) resets to 0 and
-	// is set again by the next response's usage.
+	// Replace the history and tell consumers to reload in one critical section.
+	// TotalTokens (now part of the history) resets to 0 and is set again by the
+	// next response's usage.
 	client.mutex.Lock()
-	client.History = history.History{Entries: newHistory}
+	client.history = history.History{Entries: newHistory}
+	client.publishLocked(history.Token{Type: history.TokenTypeResetChat})
 	client.mutex.Unlock()
-	// tell the consumer (TUI) to reload the whole view from the new history
-	client.triggerOnEvent(history.Token{Type: history.TokenTypeResetChat})
 	return nil
 }
 

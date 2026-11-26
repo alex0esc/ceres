@@ -61,9 +61,7 @@ func (tui *Tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (tui *Tui) handleKeyMsg(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+c":
-		if tui.selectedAgent != nil {
-			tui.selectedAgent.Client.ClearOnEvent()
-		}
+		tui.stopSubscription()
 		return tea.Quit, true
 	}
 
@@ -159,16 +157,8 @@ func (tui *Tui) submitMessage() {
 // feeds the current list element into the text field
 func (tui *Tui) applyListSelection() {
 	if selected, ok := tui.list.SelectedItem().(listItem); ok {
-		old := tui.selectedAgent
-		if old != nil {
-			old.Client.ClearOnEvent()
-		}
-		tui.selectedAgent = app.GetAgent(selected.botName)
-		tui.selectedAgent.Client.SetOnEvent(func(token history.Token) {
-			tui.inputChan <- token
-		})
+		tui.subscribeAgent(app.GetAgent(selected.botName))
 	}
-	tui.loadAgentHistory()
 	tui.viewport.SetContent(tui.getContentString())
 }
 
@@ -251,16 +241,12 @@ func (tui *Tui) acceptAutocomplete() {
 // handleChunkMsg adds a msg to the current chat
 func (tui *Tui) handleTokenMsg(token history.Token) {
 	switch token.Type {
-	case history.TokenTypeEndOfSequence:
-		tui.mergeTokens()
 	case history.TokenTypeResetChat:
-		// the history was replaced (compressed/cleared); drop any in-flight
-		// tokens and rebuild the view from the client's authoritative history
+		// the history was replaced (compressed/cleared) or the subscription
+		// overflowed; a full resync from a fresh snapshot covers both cases
 		tui.loadAgentHistory()
 	default:
-		if token.Type != history.EntryTypeReasoning || tui.showReasoning {
-			tui.tokens = append(tui.tokens, token)
-		}
+		tui.applyToken(token)
 	}
 	tui.viewport.SetContent(tui.getContentString())
 	tui.viewport.GotoBottom()

@@ -116,7 +116,7 @@ func (tui *Tui) getInfoTextString() string {
 	}
 
 	client := tui.selectedAgent.Client
-	used := client.History.TotalTokens
+	used := client.TotalTokens()
 	threshold := client.CompressionThreshold
 
 	// status: spinner while working, solid marker otherwise
