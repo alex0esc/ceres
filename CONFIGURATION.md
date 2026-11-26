@@ -6,7 +6,7 @@ file may start out empty or partial. Existing values, comments, and formatting
 are left untouched.
 
 - `config/appconfig.toml` – process-wide settings (platforms, timezone, TUI, global tool settings)
-- `config/endpoints.toml` – the LLM endpoints agents can use, plus infrastructure settings
+- `config/endpoints.toml` – the LLM endpoints agents can use, infrastructure settings, and web tool settings
 - `agents/*.toml` – one file per agent (including per-agent tool settings)
 - `config/wakeups.toml` – scheduled tasks that wake agents up
 
@@ -38,15 +38,12 @@ Process-wide settings. Everything here applies to all agents.
 | `timezone`                               | string          | `"Local"` | Timezone for the cron scheduler and the default timezone of `get_time`/`wakeup_add`. |
 | `tui.message_timeout`                    | duration        | `"1h0m0s"` | How long the TUI keeps a conversation alive while idle. |
 | `tui.show_reasoning`                     | bool            | `true`  | Show the model's reasoning output in the TUI. |
-| `discord.agent_name`                     | string          | `"Ceres"` | Agent that answers on Discord. |
+| `discord.default_agent`                  | string          | `"Ceres"` | Default agent that answers on Discord. Can be changed per DM with `/agent choose`. |
 | `discord.bot_token`                      | string          | `"<token>"` | Discord bot token. |
 | `discord.guild_id`                       | string          | `"<guild_id>"` | Discord guild for slash commands. |
 | `discord.user_id`                        | string          | `"<id>"` | Discord user that receives DMs. |
 | `discord.message_timeout`                | duration        | `"1h0m0s"` | Idle timeout for Discord conversations. |
 | `tool_settings.discord.max_file_size_kb` | int             | `8192`  | Maximum file size the `discord_msg` tool may upload. |
-| `tool_settings.searxng.url`              | string          | `"http://localhost:8080"` | SearXNG base URL used by `web_search`. |
-| `tool_settings.firecrawl.url`            | string          | `"http://localhost:3002"` | Firecrawl base URL used by `web_extract`. |
-| `tool_settings.firecrawl.api_key`        | string          | `""`    | Firecrawl API key. |
 
 Example:
 
@@ -58,12 +55,8 @@ timezone = "Local"
   message_timeout = "1h0m0s"
   show_reasoning = true
 
-[tool_settings.searxng]
-  url = "http://localhost:8080"
-
-[tool_settings.firecrawl]
-  url = "http://localhost:3002"
-  api_key = ""
+[tool_settings]
+  discord.max_file_size_kb = 8192
 ```
 
 ## Endpoints
@@ -109,6 +102,23 @@ The same file also holds process-wide infrastructure settings:
 ```toml
 [sandbox]
   docker_host = ""
+```
+
+### Tool settings
+
+The web tools read their settings from this file as well:
+
+| Key                                   | Type   | Default | Description |
+|---------------------------------------|--------|---------|-------------|
+| `tool_settings.searxng.url`           | string | `"http://localhost:8080"` | SearXNG base URL used by `web_search`. |
+| `tool_settings.firecrawl.url`         | string | `"http://localhost:3002"` | Firecrawl base URL used by `web_extract`. |
+| `tool_settings.firecrawl.api_key`     | string | `""`    | Firecrawl API key. |
+
+```toml
+[tool_settings]
+  searxng.url = "http://localhost:8080"
+  firecrawl.url = "http://localhost:3002"
+  firecrawl.api_key = ""
 ```
 
 ## Agents
