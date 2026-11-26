@@ -3,6 +3,8 @@ package handles
 import (
 	"time"
 
+	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/stream"
 	"github.com/alex0esc/ceres/internal/task"
 	"github.com/alex0esc/ceres/internal/wakeup"
 	"github.com/alex0esc/ceres/pkg/config"
@@ -29,8 +31,23 @@ func (s AgentState) String() string {
 	}
 }
 
+// ClientHandle is the part of an agent's client that platforms and tools may
+// use. Streaming is exposed through neutral stream types so callers do not
+// need to import the inference implementation.
 type ClientHandle interface {
 	AppendUserPrompt(prompt task.Prompt)
+
+	// Subscribe registers a live subscriber without taking a snapshot. New
+	// consumers should normally use SnapshotAndSubscribe instead.
+	Subscribe(buffer int) stream.Stream
+	// SnapshotAndSubscribe atomically captures the current state and registers
+	// the subscription, so no token can be lost or delivered twice.
+	SnapshotAndSubscribe(buffer int) (stream.Snapshot, stream.Stream)
+	Snapshot() stream.Snapshot
+
+	Interrupt()
+	TotalTokens() int64
+	ReplaceHistory(history.History)
 }
 
 type WakeupHandle interface {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/history"
-	"github.com/alex0esc/ceres/internal/inference"
+	"github.com/alex0esc/ceres/internal/stream"
 	"github.com/charmbracelet/glamour"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -98,7 +98,7 @@ func (tui *Tui) subscribeAgent(agnt *agent.Agent) {
 		return
 	}
 
-	snap, sub := agnt.Client.SnapshotAndSubscribe(inference.DefaultSubscriptionBuffer)
+	snap, sub := agnt.Client.SnapshotAndSubscribe(stream.DefaultBuffer)
 	tui.sub = sub
 	done := make(chan struct{})
 	exited := make(chan struct{})
@@ -128,11 +128,11 @@ func (tui *Tui) stopSubscription() {
 // channel consumed by the bubbletea update loop. If the client dropped the
 // subscription because the buffer overflowed, it signals a reset so the update
 // loop can resubscribe from a fresh snapshot.
-func (tui *Tui) pumpTokens(sub *inference.Subscription, done <-chan struct{}, exited chan<- struct{}) {
+func (tui *Tui) pumpTokens(sub stream.Stream, done <-chan struct{}, exited chan<- struct{}) {
 	defer close(exited)
 	for {
 		select {
-		case token, ok := <-sub.C:
+		case token, ok := <-sub.Tokens():
 			if !ok {
 				if sub.Err() != nil {
 					select {
@@ -166,7 +166,7 @@ func (tui *Tui) drainInputChan() {
 // applySnapshot rebuilds messages from the stored history and replays the
 // still-streamed partial answer through the same merge logic used for live
 // tokens.
-func (tui *Tui) applySnapshot(snap inference.Snapshot) {
+func (tui *Tui) applySnapshot(snap stream.Snapshot) {
 	tui.messages = nil
 	tui.tokens = nil
 	tui.pendingToken = nil

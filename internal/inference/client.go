@@ -15,6 +15,9 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
+// Client is the platform-facing client handle as well as the concrete
+// implementation used by the agent itself.
+var _ handles.ClientHandle = (*Client)(nil)
 
 type Client struct {
 	endpoint        *Endpoint

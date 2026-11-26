@@ -1,36 +1,17 @@
 package inference
 
 import (
-	"errors"
-
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/stream"
 )
 
-// DefaultSubscriptionBuffer is the channel capacity used when a caller does not
-// request a specific buffer size. At typical streaming rates this is several
-// minutes worth of tokens, so reaching it means the consumer is really stuck.
-const DefaultSubscriptionBuffer = 4096
-
-// ErrSubscriptionOverflow is returned by Subscription.Err when the consumer was
-// too slow and the client dropped its subscription. The consumer must resync by
-// taking a fresh snapshot instead of trying to catch up on the old channel.
-var ErrSubscriptionOverflow = errors.New("inference: subscription buffer overflow")
-
-// Snapshot is a consistent view of a client's state at one point in time.
-// History and Partial together contain everything a new consumer needs to
-// render the current conversation; Partial holds the tokens of a response that
-// is still being streamed.
-type Snapshot struct {
-	History     history.History
-	Partial     []history.Token
-	Compressing bool
-}
+// Compile-time check that Subscription fulfils the neutral stream interface.
+var _ stream.Stream = (*Subscription)(nil)
 
 // Subscription is a live token stream owned by one consumer. The consumer reads
-// from C and must call Close when it is done. Tokens in C are immutable and are
+// from Tokens and must call Close when it is done. Tokens are immutable and are
 // the same values delivered to every other subscriber.
 type Subscription struct {
-	C  <-chan history.Token
 	ch chan history.Token
 
 	client *Client
@@ -40,9 +21,19 @@ type Subscription struct {
 	reason error
 }
 
+// Tokens returns the channel on which streamed tokens are delivered. It is
+// closed when the subscription ends; check Err afterwards to distinguish an
+// overflow from a normal Close.
+func (s *Subscription) Tokens() <-chan history.Token {
+	if s == nil {
+		return nil
+	}
+	return s.ch
+}
+
 // Close unsubscribes the consumer. It is safe to call multiple times and from
-// any goroutine. Tokens that are already buffered can still be drained from C
-// after Close returns.
+// any goroutine. Tokens that are already buffered can still be drained from
+// Tokens after Close returns.
 func (s *Subscription) Close() {
 	if s == nil || s.client == nil {
 		return
@@ -61,7 +52,8 @@ func (s *Subscription) Close() {
 }
 
 // Err returns why the subscription was closed by the client, or nil if it was
-// closed by the consumer. Check it after C is drained to detect an overflow.
+// closed by the consumer. Check it after Tokens is drained to detect an
+// overflow (errors.Is(err, stream.ErrOverflow)).
 func (s *Subscription) Err() error {
 	if s == nil || s.client == nil {
 		return nil
@@ -75,7 +67,7 @@ func (s *Subscription) Err() error {
 
 // Subscribe registers a new live subscriber without taking a snapshot. New
 // consumers should normally use SnapshotAndSubscribe so they cannot miss state.
-func (c *Client) Subscribe(buffer int) *Subscription {
+func (c *Client) Subscribe(buffer int) stream.Stream {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	return c.subscribeLocked(buffer)
@@ -84,7 +76,7 @@ func (c *Client) Subscribe(buffer int) *Subscription {
 // SnapshotAndSubscribe atomically captures the current state and registers the
 // subscription. Every token is therefore either part of the snapshot or
 // delivered through the subscription, never both and never neither.
-func (c *Client) SnapshotAndSubscribe(buffer int) (Snapshot, *Subscription) {
+func (c *Client) SnapshotAndSubscribe(buffer int) (stream.Snapshot, stream.Stream) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -94,15 +86,15 @@ func (c *Client) SnapshotAndSubscribe(buffer int) (Snapshot, *Subscription) {
 
 // Snapshot returns a consistent copy of the current history and streamed
 // partial answer.
-func (c *Client) Snapshot() Snapshot {
+func (c *Client) Snapshot() stream.Snapshot {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	return c.snapshotLocked()
 }
 
 
-func (c *Client) snapshotLocked() Snapshot {
-	return Snapshot{
+func (c *Client) snapshotLocked() stream.Snapshot {
+	return stream.Snapshot{
 		History:     c.history.Copy(),
 		Partial:     append([]history.Token(nil), c.partialAnswer...),
 		Compressing: c.isCompressing,
@@ -111,7 +103,7 @@ func (c *Client) snapshotLocked() Snapshot {
 
 func (c *Client) subscribeLocked(buffer int) *Subscription {
 	if buffer <= 0 {
-		buffer = DefaultSubscriptionBuffer
+		buffer = stream.DefaultBuffer
 	}
 	if c.subscriptions == nil {
 		c.subscriptions = make(map[*Subscription]struct{})
@@ -119,7 +111,6 @@ func (c *Client) subscribeLocked(buffer int) *Subscription {
 
 	ch := make(chan history.Token, buffer)
 	sub := &Subscription{
-		C:      ch,
 		ch:     ch,
 		client: c,
 	}
@@ -136,7 +127,7 @@ func (c *Client) publishLocked(token history.Token) {
 		case sub.ch <- token:
 		default:
 			sub.closed = true
-			sub.reason = ErrSubscriptionOverflow
+			sub.reason = stream.ErrOverflow
 			delete(c.subscriptions, sub)
 			close(sub.ch)
 		}
