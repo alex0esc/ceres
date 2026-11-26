@@ -183,8 +183,10 @@ func initSubagentTool() {
 
 // initializes platforms
 func initPlatforms() {
+	handle_map := GetHandleMap()
+	
 	for _, name := range config.ReadEntry(appconfig.Get(), "active_platforms", []string{}) {
 		plat := platform.Get(name)	
-		go plat.Listen(GetAgent(plat.AgentName()))
+		go plat.Listen(handle_map)
 	}
 }

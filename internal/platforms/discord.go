@@ -71,15 +71,14 @@ func (d *Discord) Name() string {
 	return "discord"
 }
 
-func (d *Discord) AgentName() string {
-	return d.agentName
-}
 
 // Listen blocks and listens for incoming DMs until the process is terminated.
-func (d *Discord) Listen(agent handles.AgentHandle) {
+func (d *Discord) Listen(agents map[string]handles.AgentHandle) {
 	if d.session == nil {
 		return
 	}
+
+	agent := agents[d.agentName]
 
 	// we need DM intents + message content to be able to read DM contents
 	d.session.Identify.Intents = discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent

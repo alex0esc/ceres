@@ -11,8 +11,7 @@ var registry = make(map[string]Platform)
 
 type Platform interface {
 	Name() string
-	AgentName() string
-	Listen(agent handles.AgentHandle)
+	Listen(agent map[string]handles.AgentHandle)
 	StopListen()
 }
 
