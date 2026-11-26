@@ -46,11 +46,11 @@ func (agent *Agent) worker() {
 				err := agent.Client.CompressHistory(runCtx)
 				t.ResultCh <- task.TaskResult{Response: nil, Err: err}
 			case task.TaskTypeClear:
-				agent.Client.ClearHistory()
+				agent.Client.ReplaceHistory(history.History{})
 				t.ResultCh <- task.TaskResult{Response: nil, Err: nil}
 			case task.TaskTypeAsk, task.TaskTypeClearAsk:
 				if t.Tasktype == task.TaskTypeClearAsk {
-					agent.Client.ClearHistory()
+					agent.Client.ReplaceHistory(history.History{})
 				}
 				var fullResp *history.History = &history.History{}
 				for _, promt := range t.Prompts {
@@ -73,7 +73,7 @@ func (agent *Agent) worker() {
 			agent.currentTask = nil
 
 			// persist the agent's chat history after every finished task
-			if err := history.StorageSave(agent.name, agent.Client.History); err != nil {
+			if err := history.StorageSave(agent.name, agent.Client.Snapshot().History); err != nil {
 				slog.Error("failed to persist history", "agent", agent.name, "error", err)
 			}
 		}

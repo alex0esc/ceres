@@ -5,6 +5,7 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/inference"
+	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/robfig/cron/v3"
 )
 
@@ -30,4 +31,14 @@ func GetAgentList() []*agent.Agent {
         list = append(list, agnt)
     }
     return list
+}
+
+func GetHandleMap() map[string]handles.AgentHandle {
+	agent_handles := map[string]handles.AgentHandle{}
+
+	for name, agent := range agents {
+		agent_handles[name] = agent
+	}	
+
+	return agent_handles
 }

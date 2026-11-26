@@ -5,6 +5,7 @@ import (
 
 	"github.com/alex0esc/ceres/internal/agent"
 	"github.com/alex0esc/ceres/internal/history"
+	"github.com/alex0esc/ceres/internal/inference"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
@@ -51,6 +52,11 @@ type Tui struct {
 
 	inputChan chan history.Token
 	pendingToken  *history.Token
+
+	// live token stream of the selected agent
+	sub       *inference.Subscription
+	subDone   chan struct{}
+	subExited chan struct{}
 
 	//drives status animations (spinner frames)
 	tickFrame int

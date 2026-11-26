@@ -12,7 +12,7 @@
 - **Web tools** – web search (SearXNG) and content extraction (Firecrawl) returned as Markdown.
 - **History compression** – when a token limit is exceeded, the chat is summarized automatically.
 - **Persistent chat history** – each agent's conversation is stored in SQLite and restored on restart.
-- **Platforms** – Discord (DM listener with typing indicator, image uploads, slash commands).
+- **Platforms** – Discord (DM listener with typing indicator, image uploads, slash commands, per-DM agent selection via `/agent list` and `/agent choose`).
 - **Reasoning/thinking** – support for reasoning summaries, optionally shown in the TUI.
 - **TUI + CLI** – Bubble Tea TUI (agent list, chat, input) plus a CLI loop (`tui`, `reload`, `exit`).
 - **Dynamic TOML config** – missing config values are written automatically with defaults, preserving existing comments and formatting (two-space indentation, multi-line strings, dotted keys).
@@ -29,7 +29,7 @@ internal/
   task/                 Task types (ask, clear, clear_ask, compress)
   wakeup/               Wakeup manager, scheduler, SQLite DB + TOML loader
   tools/                Tool implementations (bash, file_*, web_*, memory_sql, ...)
-  platforms/            Discord platform (gateway/DM)
+  platforms/discord/    Discord platform (gateway/DM, slash commands, agent selection)
   bubbletea/            TUI (list, viewport, textarea, rendering)
   commands/             Slash commands (help, clear, compress, interrupt, wakeup)
   constants/            Paths
@@ -51,8 +51,8 @@ database/               SQLite DBs (memory per agent, histories, wakeups)
 
 All configs live in `config/` as TOML:
 
-- `appconfig.toml` – active platforms, platform settings (Discord token/IDs), timezone, TUI options, global tool settings (Discord upload size, search/extract endpoints)
-- `endpoints.toml` – LLM endpoints (base URL, API key) and infrastructure (sandbox Docker host)
+- `appconfig.toml` – active platforms, platform settings (Discord token/IDs, default agent), timezone, TUI options, global tool settings (Discord upload size)
+- `endpoints.toml` – LLM endpoints (base URL, API key), infrastructure (sandbox Docker host), and web tool settings (SearXNG, Firecrawl)
 - `wakeups.toml` – external/scheduled wakeups
 
 Per-agent tool settings (timeouts, result limits, wakeup permissions) live in
