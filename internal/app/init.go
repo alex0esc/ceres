@@ -9,8 +9,7 @@ import (
 	"github.com/alex0esc/ceres/internal/constants"
 	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/inference"
-	"github.com/alex0esc/ceres/internal/platforms"
-	_ "github.com/alex0esc/ceres/internal/platforms"
+	"github.com/alex0esc/ceres/internal/platforms/discord"
 	"github.com/alex0esc/ceres/internal/wakeup"
 	"github.com/robfig/cron/v3"
 
@@ -156,7 +155,7 @@ func registerInternalTools() {
 
 
 func registerInternalPlatforms() {
-	platform.Register(platforms.NewDiscord())
+	platform.Register(discord.NewDiscord())
 }
 
 
