@@ -47,6 +47,7 @@ type ClientHandle interface {
 
 	Interrupt()
 	TotalTokens() int64
+	IsCompressing() bool
 	ReplaceHistory(history.History)
 }
 

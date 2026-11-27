@@ -12,7 +12,7 @@
 - **Web tools** – web search (SearXNG) and content extraction (Firecrawl) returned as Markdown.
 - **History compression** – when a token limit is exceeded, the chat is summarized automatically.
 - **Persistent chat history** – each agent's conversation is stored in SQLite and restored on restart.
-- **Platforms** – Discord (DM listener with typing indicator, image uploads, slash commands, per-DM agent selection via `/agent list` and `/agent choose`).
+- **Platforms** – Discord (DM listener with typing indicator, image uploads, slash commands, per-DM agent selection via `/agent list` and `/agent choose`); Web (embedded dashboard UI with live history/token streaming via WebSocket, per-tab agent switching, agent sidebar with search and icons, dark/light mode, working-state indicator and token counter, Markdown + LaTeX rendering with marked/DOMPurify/highlight.js/KaTeX).
 - **Reasoning/thinking** – support for reasoning summaries, optionally shown in the TUI.
 - **TUI + CLI** – Bubble Tea TUI (agent list, chat, input) plus a CLI loop (`tui`, `reload`, `exit`).
 - **Dynamic TOML config** – missing config values are written automatically with defaults, preserving existing comments and formatting (two-space indentation, multi-line strings, dotted keys).
@@ -30,6 +30,7 @@ internal/
   wakeup/               Wakeup manager, scheduler, SQLite DB + TOML loader
   tools/                Tool implementations (bash, file_*, web_*, memory_sql, ...)
   platforms/discord/    Discord platform (gateway/DM, slash commands, agent selection)
+  platforms/web/        Web platform (embedded UI, WebSocket streaming)
   bubbletea/            TUI (list, viewport, textarea, rendering)
   commands/             Slash commands (help, clear, compress, interrupt, wakeup)
   constants/            Paths

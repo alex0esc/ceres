@@ -34,10 +34,14 @@ Process-wide settings. Everything here applies to all agents.
 
 | Key                                      | Type            | Default | Description |
 |------------------------------------------|-----------------|---------|-------------|
-| `active_platforms`                       | array of string | `[]`    | Platforms to start (e.g. `["discord"]`). |
+| `active_platforms`                       | array of string | `[]`    | Platforms to start (e.g. `["discord", "web"]`). |
 | `timezone`                               | string          | `"Local"` | Timezone for the cron scheduler and the default timezone of `get_time`/`wakeup_add`. |
 | `tui.message_timeout`                    | duration        | `"1h0m0s"` | How long the TUI keeps a conversation alive while idle. |
 | `tui.show_reasoning`                     | bool            | `true`  | Show the model's reasoning output in the TUI. |
+| `web.addr`                               | string          | `"127.0.0.1:8080"` | Address the web platform listens on. |
+| `web.default_agent`                      | string          | `""`    | Initial agent for web clients; empty means the alphabetically first agent. Browsers can switch agents via the sidebar and remember the choice locally. |
+| `web.show_reasoning`                     | bool            | `true`  | Send reasoning entries to the browser. |
+| `web.message_timeout`                    | duration        | `"1h0m0s"` | Timeout for messages submitted from the browser. |
 | `discord.default_agent`                  | string          | `"Ceres"` | Default agent that answers on Discord. Can be changed per DM with `/agent choose`. |
 | `discord.bot_token`                      | string          | `"<token>"` | Discord bot token. |
 | `discord.guild_id`                       | string          | `"<guild_id>"` | Discord guild for slash commands. |
@@ -54,6 +58,12 @@ timezone = "Local"
 [tui]
   message_timeout = "1h0m0s"
   show_reasoning = true
+
+[web]
+  addr = "127.0.0.1:8080"
+  default_agent = ""
+  show_reasoning = true
+  message_timeout = "1h0m0s"
 
 [tool_settings]
   discord.max_file_size_kb = 8192

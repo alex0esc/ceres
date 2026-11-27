@@ -37,7 +37,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 			client.mutex.Lock()
 			client.cancelActiveRun = nil
 			client.mutex.Unlock()
-		}()		
+		}()
 	}
 	client.mutex.Unlock()
 
@@ -49,8 +49,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 		client.isCompressing = false
 		client.mutex.Unlock()
 	}()
-
-	
 
 	cutoff := totalMessages - client.NumMessagesToKeep
 	toCompress := entries[:cutoff]
@@ -83,7 +81,7 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 			},
 			Tools: client.toolParams,
 		},
-		client.requestOpts()...
+			client.requestOpts()...,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to compress history: %w", err)
@@ -119,13 +117,10 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 		return fmt.Errorf("compression yielded an empty summary")
 	}
 
-	
-
-	// 4. Rebuild chat history: [Summary turn] + [unmodified recent messages]
+	// 4. Rebuild chat history: [summary turn] + [unmodified recent messages]
 	newHistory := make([]history.Entry, 0, 1+len(toKeep))
 
-	summaryStr := "[Summary of previous conversation]\n\n" + summary + "\n\n[End of summary]"
-	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summaryStr})
+	newHistory = append(newHistory, history.Entry{Type: history.EntryTypeUser, Text: summary})
 	newHistory = append(newHistory, toKeep...)
 
 	// Replace the history and tell consumers to reload in one critical section.
@@ -137,8 +132,6 @@ func (client *Client) CompressHistory(ctx context.Context) error {
 	client.mutex.Unlock()
 	return nil
 }
-
-
 
 func (client *Client) IsCompressing() bool {
 	client.mutex.Lock()

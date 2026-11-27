@@ -56,7 +56,6 @@ func (c *Client) TotalTokens() int64 {
 }
 
 
-
 func generateReasoningID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

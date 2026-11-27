@@ -4,6 +4,7 @@ import (
 	"iter"
 	"slices"
 	"strings"
+	"time"
 )
 
 type History struct {
@@ -12,6 +13,9 @@ type History struct {
 }
 
 func (history *History) Push(entry Entry) {
+	if entry.Timestamp <= 0 {
+		entry.Timestamp = time.Now().UnixMilli()	
+	}
 	history.Entries = append(history.Entries, entry)
 }
 

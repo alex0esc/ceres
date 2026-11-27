@@ -269,9 +269,9 @@ func (client *Client) AskStream(ctx context.Context, prompt task.Prompt, handle 
 
 		client.publish(history.Token{Type: history.TokenTypeEndOfSequence})
 
+		// Persist the interrupted answer and clear the partial state in one
+		// critical section so snapshots do not show it twice or lose it.
 		if errors.Is(stream.Err(), context.Canceled) {
-			// Persist the interrupted answer and clear the partial state in one
-			// critical section so snapshots do not show it twice or lose it.
 			client.mutex.Lock()
 			var reason strings.Builder
 			var normal strings.Builder

@@ -11,3 +11,4 @@ go.sum
 /logs/
 /wakeups/
 /database/
+internal/platforms/web/static/vendor/fonts/

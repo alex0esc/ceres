@@ -60,6 +60,8 @@ type Entry struct {
 	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
 	ToolResult *ToolResult `json:"tool_result,omitempty"`
 	Images     []Image     `json:"images,omitempty"`
+
+	Timestamp  int64 `json:"timestamp,omitempty"`
 }
 
 // Token is an Entry used as a streamed delta or lifecycle event (as opposed to
