@@ -5,15 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, registers "sqlite"
-
-	"github.com/alex0esc/ceres/internal/constants"
+	"github.com/alex0esc/ceres/internal/agentdb"
 	"github.com/alex0esc/ceres/pkg/config"
 	"github.com/alex0esc/ceres/pkg/handles"
 	"github.com/alex0esc/ceres/pkg/tool"
@@ -111,7 +108,6 @@ func (MemorySQLTool) Handler() tool.ToolHandler {
 		if agentName == "" {
 			return "", fmt.Errorf("memory_sql: agent handle returned empty name")
 		}
-		dbPath := constants.AgentMemoriesDBPath(agentName)
 
 		maxRows := config.ReadEntry(handle.Config(), "tool_settings.memory_sql.max_rows", 100)
 		maxColumns := config.ReadEntry(handle.Config(), "tool_settings.memory_sql.max_columns", 50)
@@ -132,11 +128,10 @@ func (MemorySQLTool) Handler() tool.ToolHandler {
 		ctx, cancel := context.WithTimeout(ctx, memorySQLTimeout)
 		defer cancel()
 
-		db, err := openMemoryDB(ctx, dbPath)
+		db, err := openMemoryDB(ctx, agentName)
 		if err != nil {
 			return "", fmt.Errorf("memory_sql: %w", err)
 		}
-		defer db.Close()
 
 		return memorySQLExecute(ctx, db, args.SQL, maxRows, maxColumns)
 	}
@@ -151,34 +146,30 @@ type memoryDB struct {
 	ro *sql.DB // connection with query_only, used for queries
 }
 
-func (d *memoryDB) Close() {
-	d.ro.Close()
-	d.rw.Close()
-}
+// schemaMu guards the per-agent schema initialisation. Connections are owned
+// by agentdb and reused across tool calls; this only creates the base table.
+var (
+	schemaMu sync.Mutex
+	schemas  = make(map[string]bool)
+)
 
-func openMemoryDB(ctx context.Context, path string) (*memoryDB, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("could not create memory directory: %w", err)
-	}
-
-	rw, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
+func openMemoryDB(ctx context.Context, agentName string) (*memoryDB, error) {
+	dbs, err := agentdb.Open(agentName)
 	if err != nil {
-		return nil, fmt.Errorf("could not open database: %w", err)
-	}
-	rw.SetMaxOpenConns(1)
-
-	// Creates the file on first use and makes sure the base table exists.
-	if _, err := rw.ExecContext(ctx, defaultSchema); err != nil {
-		rw.Close()
-		return nil, fmt.Errorf("could not initialise database: %w", err)
+		return nil, fmt.Errorf("could not open agent databases: %w", err)
 	}
 
-	ro, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=query_only(1)")
-	if err != nil {
-		rw.Close()
-		return nil, fmt.Errorf("could not open read-only connection: %w", err)
+	schemaMu.Lock()
+	defer schemaMu.Unlock()
+	if !schemas[agentName] {
+		// Creates the file on first use and makes sure the base table exists.
+		if _, err := dbs.MemoryRW.ExecContext(ctx, defaultSchema); err != nil {
+			return nil, fmt.Errorf("could not initialise database: %w", err)
+		}
+		schemas[agentName] = true
 	}
-	return &memoryDB{rw: rw, ro: ro}, nil
+
+	return &memoryDB{rw: dbs.MemoryRW, ro: dbs.MemoryRO}, nil
 }
 
 // memorySQLCheck rejects empty statements, statements that could leave the agent's

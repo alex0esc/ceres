@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/alex0esc/ceres/internal/agent"
+	"github.com/alex0esc/ceres/internal/agentdb"
 	"github.com/alex0esc/ceres/internal/commands"
 	"github.com/alex0esc/ceres/internal/constants"
-	"github.com/alex0esc/ceres/internal/history"
 	"github.com/alex0esc/ceres/internal/inference"
 	"github.com/alex0esc/ceres/internal/platforms/discord"
 	webplatform "github.com/alex0esc/ceres/internal/platforms/web"
@@ -25,7 +25,7 @@ import (
 )
 
 // initializes necessary stuff and loads configs, starts agents
-func  Start() error {
+func Start() error {
 	var err error = loadConfigs()
 	if err != nil {
 		return err
@@ -64,7 +64,6 @@ func  Start() error {
 	return nil
 }
 
-
 func Shutdown() {
 	for _, agnt := range agents {
 		agnt.Stop()
@@ -80,13 +79,11 @@ func Shutdown() {
 	endpoints = nil
 	agents = nil
 	cronLib = nil
-	wakeup.DbCloseAll()
-	history.StorageCloseAll()
+	agentdb.CloseAll()
 	tool.ClearRegistry()
 	platform.ClearRegistry()
 	command.ClearRegistry()
 }
-
 
 func loadConfigs() error {
 	if err := appconfig.Load(constants.AppConfigPath); err != nil {
@@ -97,8 +94,8 @@ func loadConfigs() error {
 	endpoints, err = inference.LoadEndpointsFromConfig()
 	if err != nil {
 		return fmt.Errorf("error reading endpoints config: %v", err)
-	}	
-	
+	}
+
 	registerInternalTools()
 	if err := extensions.Register(); err != nil {
 		return fmt.Errorf("error registering external tools: %v", err)
@@ -119,20 +116,18 @@ func loadConfigs() error {
 	agents, err = agent.LoadAgentsFromDir(endpoints, cronLib)
 	if err != nil {
 		return fmt.Errorf("error loading agents: %v", err)
-	}	
+	}
 
 	for agntName, wakeups := range wakeups {
-	    if agent, ok := agents[agntName]; ok {
-	        agent.WakeupManager().AddAll(wakeups)
-	    } else {
-	        return fmt.Errorf("Wakeup for unknown agent %s", agntName)
-	    }
-	}	
+		if agent, ok := agents[agntName]; ok {
+			agent.WakeupManager().AddAll(wakeups)
+		} else {
+			return fmt.Errorf("Wakeup for unknown agent %s", agntName)
+		}
+	}
 
 	return nil
 }
-
-
 
 func registerInternalTools() {
 	tool.Register(tools.NewBashTool())
@@ -154,12 +149,10 @@ func registerInternalTools() {
 	tool.Register(tools.NewWakeupInspectTool())
 }
 
-
 func registerInternalPlatforms() {
 	platform.Register(discord.NewDiscord())
 	platform.Register(webplatform.NewWeb())
 }
-
 
 func registerInternalCommands() {
 	command.Register(commands.NewHelpCommand())
@@ -171,23 +164,21 @@ func registerInternalCommands() {
 
 // initilaizes the subagnent tools with the right agent references
 func initSubagentTool() {
-	var subagentList map[string]handles.AgentHandle = make(map[string]handles.AgentHandle) 
+	var subagentList map[string]handles.AgentHandle = make(map[string]handles.AgentHandle)
 	for _, agent := range agents {
-		if(agent.IsSubagent()) {
+		if agent.IsSubagent() {
 			subagentList[agent.Name()] = agent
- 		}
+		}
 	}
 	tools.SetSubagents(subagentList)
 }
 
-
-
 // initializes platforms
 func initPlatforms() {
 	handle_map := GetHandleMap()
-	
+
 	for _, name := range config.ReadEntry(appconfig.Get(), "active_platforms", []string{}) {
-		plat := platform.Get(name)	
+		plat := platform.Get(name)
 		go plat.Listen(handle_map)
 	}
 }

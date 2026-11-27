@@ -5,15 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, registers "sqlite"
-
-	"github.com/alex0esc/ceres/internal/constants"
+	"github.com/alex0esc/ceres/internal/agentdb"
 	"github.com/alex0esc/ceres/internal/task"
 )
 
@@ -66,60 +62,38 @@ var (
 	ErrExists   = errors.New("wakeup: already exists")
 )
 
-// dbs holds one open handle per agent database (the agent's
-// persistent_data.db), opened lazily on first use and closed by DbCloseAll.
+// initialized tracks which agents already have the wakeups table. The
+// connection itself is owned by agentdb and shared with the history storage.
 var (
-	dbMu  sync.Mutex
-	dbs   = make(map[string]*sql.DB)
+	dbMu        sync.Mutex
+	initialized = make(map[string]bool)
 )
 
 // ---------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------
 
-// dbHandle returns the agent's wakeup database, opening (and creating) it on
-// first use.
+// dbHandle returns the agent's shared persistent handle and makes sure the
+// wakeups table exists.
 func dbHandle(agentName string) (*sql.DB, error) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	if d, ok := dbs[agentName]; ok {
-		return d, nil
-	}
-
-	path := constants.AgentPersistentDBPath(agentName)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create wakeup directory: %w", err)
-	}
-
-	d, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
+	dbs, err := agentdb.Open(agentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open wakeup database: %w", err)
 	}
-	// One connection: writes are serialized anyway. Never keep rows open
-	// while running another query, that would block forever.
-	d.SetMaxOpenConns(1)
+
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if initialized[agentName] {
+		return dbs.Persistent, nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	defer cancel()
-	if _, err := d.ExecContext(ctx, schema); err != nil {
-		d.Close()
+	if _, err := dbs.Persistent.ExecContext(ctx, schema); err != nil {
 		return nil, fmt.Errorf("failed to initialise wakeup database: %w", err)
 	}
-
-	dbs[agentName] = d
-	return d, nil
-}
-
-// DbCloseAll closes all open wakeup databases.
-func DbCloseAll() {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	for name, d := range dbs {
-		d.Close()
-		delete(dbs, name)
-	}
+	initialized[agentName] = true
+	return dbs.Persistent, nil
 }
 
 // DbLoadWakeups reads the wakeups of one agent from its wakeup database and
