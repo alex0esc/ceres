@@ -18,7 +18,6 @@ function init() {
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented) return;
     if (event.key === "Escape") {
-      if (isAgentMenuOpen()) { event.preventDefault(); closeAgentMenu(true); return; }
       closeIconPicker();
       closeConfirmModal();
       closeLeftDrawer();

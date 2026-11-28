@@ -31,7 +31,7 @@ function resolveAgentIcon(iconSpec, name) {
   const monogram = escapeHtml(getMonogram(name));
   const monoHtml = `<span class="monogram">${monogram}</span>`;
 
-  if (!raw || raw.toLowerCase() === "auto") return AGENT_ICONS.bot;
+  if (!raw || raw.toLowerCase() === "auto") return AGENT_ICONS.satellite;
   if (AGENT_ICONS[raw]) return AGENT_ICONS[raw];
   if (raw.startsWith("<svg")) return raw;
   if (/^(https?:\/\/|\/|\.\/|data:image\/)/i.test(raw)) {
@@ -52,7 +52,6 @@ function updateActiveHighlight() {
 }
 
 function renderAgentList() {
-  closeAgentMenu(false);
   const query = (agentSearch.value || "").trim().toLowerCase();
   const filtered = agents.filter((a) =>
     (a.name + " " + (a.description || "")).toLowerCase().includes(query)
@@ -89,18 +88,6 @@ function renderAgentList() {
       item.appendChild(el("span", "state-dot"));
     }
 
-    const moreBtn = el("button", "agent-more");
-    moreBtn.type = "button";
-    moreBtn.setAttribute("aria-label", "Actions for " + view.name);
-    moreBtn.setAttribute("aria-expanded", "false");
-    moreBtn.setAttribute("aria-controls", "agent-menu-pop");
-    moreBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
-    moreBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      toggleAgentMenu(moreBtn, view.name);
-    });
-    item.appendChild(moreBtn);
-
     item.addEventListener("click", () => selectAgent(info.name));
     item.addEventListener("keydown", (event) => {
       if (event.target === item && (event.key === "Enter" || event.key === " ")) {
@@ -113,10 +100,21 @@ function renderAgentList() {
   updateActiveHighlight();
 }
 
+// Title block above the chat: icon tile, name and description of the agent.
+function updateAgentHead() {
+  const view = agentView(currentAgentName);
+  const nameEl = document.getElementById("current-agent");
+  const descEl = document.getElementById("header-agent-desc");
+  const iconEl = document.getElementById("head-icon");
+  if (nameEl) nameEl.textContent = currentAgentName || "Connecting…";
+  if (descEl) descEl.textContent = view.description;
+  if (iconEl) iconEl.innerHTML = resolveAgentIcon(view.icon, view.name);
+}
+
 function setCurrentAgent(name) {
   currentAgentName = name || "";
-  const view = agentView(currentAgentName);
   promptEl.placeholder = `Message ${currentAgentName || "agent"}…`;
+  updateAgentHead();
   updateActiveHighlight();
   renderEmptyState();
 }
@@ -147,89 +145,18 @@ function selectAgent(name) {
 }
 
 /* =====================================================================
-    Agent row "⋯" actions menu (plain popover, not an ARIA menu)
-    ===================================================================== */
-let agentMenuTrigger = null;
-let agentMenuTarget = "";
-
-function isAgentMenuOpen() {
-  const pop = document.getElementById("agent-menu-pop");
-  return !!pop && !pop.hidden;
-}
-
-function toggleAgentMenu(trigger, name) {
-  if (isAgentMenuOpen() && agentMenuTrigger === trigger) {
-    closeAgentMenu(true);
-    return;
-  }
-  openAgentMenu(trigger, name);
-}
-
-function openAgentMenu(trigger, name) {
-  closeAgentMenu(false);
-  const pop = document.getElementById("agent-menu-pop");
-  agentMenuTrigger = trigger;
-  agentMenuTarget = name;
-  trigger.setAttribute("aria-expanded", "true");
-  pop.style.visibility = "hidden";
-  pop.hidden = false; // make visible in order to measure
-  const r = trigger.getBoundingClientRect();
-  const w = pop.offsetWidth, h = pop.offsetHeight;
-  let left = Math.min(r.right - w, window.innerWidth - w - 8);
-  left = Math.max(8, left);
-  let top = r.bottom + 4;
-  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
-  pop.style.left = left + "px";
-  pop.style.top = top + "px";
-  pop.style.visibility = "";
-  const first = pop.querySelector(".agent-menu-item");
-  if (first) first.focus();
-}
-
-function closeAgentMenu(returnFocus) {
-  const pop = document.getElementById("agent-menu-pop");
-  if (pop) pop.hidden = true;
-  if (agentMenuTrigger) {
-    agentMenuTrigger.setAttribute("aria-expanded", "false");
-    if (returnFocus && document.contains(agentMenuTrigger)) agentMenuTrigger.focus();
-  }
-  agentMenuTrigger = null;
-  agentMenuTarget = "";
-}
-
-// Menu item clicks are delegated on the popover so the buttons can be
-// re-created freely. stopPropagation() prevents the global document
-// click handler (closeIconPicker) from firing at the same time.
-document.getElementById("agent-menu-pop").addEventListener("click", (event) => {
-  const item = event.target.closest(".agent-menu-item");
-  if (!item) return;
-  event.stopPropagation();
-  const name = agentMenuTarget;
-  const action = item.dataset.action;
-  closeAgentMenu(false);
-  if (!name) return;
-  selectAgent(name);
-  if (action === "clear") {
-    promptResetCurrentChat();
-  } else if (action === "icon") {
-    renderIconPickerContent();
-    iconPicker.classList.remove("hidden");
-  }
-});
-
-// Outside click closes the menu, but clicks on a different "⋯" button
-// toggle instead (handled by each button's own listener).
-document.addEventListener("click", (event) => {
-  if (!isAgentMenuOpen()) return;
-  if (event.target.closest("#agent-menu-pop") || event.target.closest(".agent-more")) return;
-  closeAgentMenu(false);
-});
-
-/* =====================================================================
     Agent icon & accent picker
     ===================================================================== */
 function closeIconPicker() {
   iconPicker.classList.add("hidden");
+}
+
+// Opened from the pencil button at the top right. stopPropagation keeps the
+// global document click handler (closeIconPicker) from closing it again.
+function openIconPicker(event) {
+  if (event) event.stopPropagation();
+  renderIconPickerContent();
+  iconPicker.classList.remove("hidden");
 }
 
 function renderIconPickerContent() {
@@ -237,7 +164,8 @@ function renderIconPickerContent() {
 
   iconPresetGrid.replaceChildren();
   for (const [key, svg] of Object.entries(AGENT_ICONS)) {
-    const btn = el("button", "preset-btn" + (view.icon === key ? " selected" : ""));
+    const isSelected = view.icon === key || (!view.icon && key === "satellite");
+    const btn = el("button", "preset-btn" + (isSelected ? " selected" : ""));
     btn.type = "button";
     btn.title = key;
     btn.innerHTML = svg;
