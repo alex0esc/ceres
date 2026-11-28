@@ -109,20 +109,51 @@ function copyToClipboard(text) {
 function clearEmptyState() {
   const empty = document.getElementById("empty-state");
   if (empty) empty.remove();
+  chat.classList.remove("is-empty");
+  emptyPick = null;
 }
+
+/* ---------------------------------------------------------------------
+   Empty chat: icon, greeting and a short saying (texts: greetings.js).
+   The pick is cached so repeated renders do not flicker. It is rolled again
+   for another agent and after the chat was filled and cleared.
+   --------------------------------------------------------------------- */
+let emptyPick = null;
 
 function renderEmptyState() {
   // Rebuild on every call: the agent name may only become known
   // after /api/agents or the first snapshot arrives.
   const existing = document.getElementById("empty-state");
   if (existing) existing.remove();
-  if (chatInner.childElementCount > 0) return;
+  if (chatInner.childElementCount > 0) {
+    chat.classList.remove("is-empty");
+    return;
+  }
+
+  const now = new Date();
+  const view = agentView(currentAgentName);
+  if (!emptyPick || emptyPick.agent !== currentAgentName) {
+    emptyPick = Object.assign({ agent: currentAgentName }, pickGreeting(now));
+  }
 
   const box = el("div", "empty-state");
   box.id = "empty-state";
-  const name = currentAgentName || "the agent";
-  box.appendChild(el("p", "", "No messages yet"));
+
+  // Just the icon, no tile behind it, with two slowly circling rings.
+  const orbit = el("div", "empty-orbit");
+  orbit.append(el("span", "orbit-ring ring-a"), el("span", "orbit-ring ring-b"));
+  const core = el("div", "empty-core accent-moon");
+  core.innerHTML = resolveAgentIcon(view.icon, view.name);
+  orbit.appendChild(core);
+  box.appendChild(orbit);
+
+  box.appendChild(el("h2", "empty-greeting", emptyPick.title));
+  if (emptyPick.sub) box.appendChild(el("p", "empty-quip", emptyPick.sub));
+  const who = [currentAgentName, view.description].filter(Boolean).join(" · ");
+  if (who) box.appendChild(el("p", "empty-agent", who));
+  box.appendChild(el("p", "empty-date", now.toLocaleDateString(GREETING_LOCALE, { weekday: "long", day: "numeric", month: "long" })));
   chatInner.appendChild(box);
+  chat.classList.add("is-empty");
 }
 
 // Consecutive tool calls (and their results) share one collapsible block.
@@ -239,16 +270,13 @@ function makeMessage(role, type, timestamp) {
   }
 
   if (role === "user") {
+    // Dark bubble on the right, time below it (shown on hover).
     const row = el("div", "msg-row user");
-    const bodyCol = el("div", "msg-body");
-    const meta = el("div", "msg-meta");
-    const author = el("span", "msg-author");
-    author.textContent = "YOU";
-    meta.appendChild(author);
-    if (timeLabel) meta.appendChild(el("span", "msg-time", timeLabel));
-    const bubble = el("div", "msg-bubble md-content");
-    bodyCol.append(meta, bubble);
-    row.appendChild(bodyCol);
+    const col = el("div", "msg-body user-col");
+    const bubble = el("div", "msg-bubble user-bubble md-content");
+    col.appendChild(bubble);
+    if (timeLabel) col.appendChild(el("div", "user-time", timeLabel));
+    row.appendChild(col);
     chatInner.appendChild(row);
     return { row, body: bubble };
   }

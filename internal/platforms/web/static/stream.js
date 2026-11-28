@@ -89,6 +89,9 @@ function applySnapshot(frame) {
 function applyDelta(entry) {
   if (!entry) return;
   if (!showReasoning && entry.type === 2) return;
+  // Live tokens mean the agent is working (also when started by a wakeup).
+  // setWorkingState is idempotent, so this never restarts the animation.
+  if (workingState === "idle") setWorkingState("busy");
   const stick = nearBottom();
 
   if (TEXT_TYPES.has(entry.type)) {
