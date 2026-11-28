@@ -21,8 +21,7 @@ function agentView(name) {
 }
 
 function accentOf(view) {
-  const key = ACCENTS.includes(view.accent) ? view.accent : ACCENTS[hashString(view.name) % ACCENTS.length];
-  return { key, cls: "accent-" + key, dot: "dot-" + key };
+  return { key: "moon", cls: "accent-moon" };
 }
 
 // Returns an HTML string so the same icon can be used in the sidebar, header,
@@ -32,7 +31,7 @@ function resolveAgentIcon(iconSpec, name) {
   const monogram = escapeHtml(getMonogram(name));
   const monoHtml = `<span class="monogram">${monogram}</span>`;
 
-  if (!raw || raw.toLowerCase() === "auto") return monoHtml;
+  if (!raw || raw.toLowerCase() === "auto") return AGENT_ICONS.bot;
   if (AGENT_ICONS[raw]) return AGENT_ICONS[raw];
   if (raw.startsWith("<svg")) return raw;
   if (/^(https?:\/\/|\/|\.\/|data:image\/)/i.test(raw)) {
@@ -53,6 +52,7 @@ function updateActiveHighlight() {
 }
 
 function renderAgentList() {
+  closeAgentMenu(false);
   const query = (agentSearch.value || "").trim().toLowerCase();
   const filtered = agents.filter((a) =>
     (a.name + " " + (a.description || "")).toLowerCase().includes(query)
@@ -69,8 +69,9 @@ function renderAgentList() {
   for (const info of filtered) {
     const view = agentView(info.name);
     const accent = accentOf(view);
-    const item = el("button", "agent-item");
-    item.type = "button";
+    const item = el("div", "agent-item");
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
     item.dataset.agent = info.name;
 
     const icon = el("div", "icon-box " + accent.cls);
@@ -85,9 +86,28 @@ function renderAgentList() {
 
     item.append(icon, text);
     if (String(info.state || "").toLowerCase() === "busy") {
-      item.appendChild(el("span", "state-dot " + accent.dot));
+      item.appendChild(el("span", "state-dot"));
     }
+
+    const moreBtn = el("button", "agent-more");
+    moreBtn.type = "button";
+    moreBtn.setAttribute("aria-label", "Actions for " + view.name);
+    moreBtn.setAttribute("aria-expanded", "false");
+    moreBtn.setAttribute("aria-controls", "agent-menu-pop");
+    moreBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+    moreBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleAgentMenu(moreBtn, view.name);
+    });
+    item.appendChild(moreBtn);
+
     item.addEventListener("click", () => selectAgent(info.name));
+    item.addEventListener("keydown", (event) => {
+      if (event.target === item && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        selectAgent(info.name);
+      }
+    });
     agentList.appendChild(item);
   }
   updateActiveHighlight();
@@ -96,12 +116,7 @@ function renderAgentList() {
 function setCurrentAgent(name) {
   currentAgentName = name || "";
   const view = agentView(currentAgentName);
-  currentAgentEl.textContent = currentAgentName || "No agent connected";
-  headerDescEl.textContent = view.description;
   promptEl.placeholder = `Message ${currentAgentName || "agent"}…`;
-  const accent = accentOf(view);
-  headerAvatarEl.className = "icon-box agent-avatar " + accent.cls;
-  headerAvatarEl.innerHTML = resolveAgentIcon(view.icon, view.name);
   updateActiveHighlight();
   renderEmptyState();
 }
@@ -132,15 +147,87 @@ function selectAgent(name) {
 }
 
 /* =====================================================================
-   Agent icon & accent picker
-   ===================================================================== */
-function toggleIconPicker(event) {
-  if (event) event.stopPropagation();
-  const hidden = iconPicker.classList.contains("hidden");
-  if (hidden) renderIconPickerContent();
-  iconPicker.classList.toggle("hidden", !hidden);
+    Agent row "⋯" actions menu (plain popover, not an ARIA menu)
+    ===================================================================== */
+let agentMenuTrigger = null;
+let agentMenuTarget = "";
+
+function isAgentMenuOpen() {
+  const pop = document.getElementById("agent-menu-pop");
+  return !!pop && !pop.hidden;
 }
 
+function toggleAgentMenu(trigger, name) {
+  if (isAgentMenuOpen() && agentMenuTrigger === trigger) {
+    closeAgentMenu(true);
+    return;
+  }
+  openAgentMenu(trigger, name);
+}
+
+function openAgentMenu(trigger, name) {
+  closeAgentMenu(false);
+  const pop = document.getElementById("agent-menu-pop");
+  agentMenuTrigger = trigger;
+  agentMenuTarget = name;
+  trigger.setAttribute("aria-expanded", "true");
+  pop.style.visibility = "hidden";
+  pop.hidden = false; // make visible in order to measure
+  const r = trigger.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let left = Math.min(r.right - w, window.innerWidth - w - 8);
+  left = Math.max(8, left);
+  let top = r.bottom + 4;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  pop.style.visibility = "";
+  const first = pop.querySelector(".agent-menu-item");
+  if (first) first.focus();
+}
+
+function closeAgentMenu(returnFocus) {
+  const pop = document.getElementById("agent-menu-pop");
+  if (pop) pop.hidden = true;
+  if (agentMenuTrigger) {
+    agentMenuTrigger.setAttribute("aria-expanded", "false");
+    if (returnFocus && document.contains(agentMenuTrigger)) agentMenuTrigger.focus();
+  }
+  agentMenuTrigger = null;
+  agentMenuTarget = "";
+}
+
+// Menu item clicks are delegated on the popover so the buttons can be
+// re-created freely. stopPropagation() prevents the global document
+// click handler (closeIconPicker) from firing at the same time.
+document.getElementById("agent-menu-pop").addEventListener("click", (event) => {
+  const item = event.target.closest(".agent-menu-item");
+  if (!item) return;
+  event.stopPropagation();
+  const name = agentMenuTarget;
+  const action = item.dataset.action;
+  closeAgentMenu(false);
+  if (!name) return;
+  selectAgent(name);
+  if (action === "clear") {
+    promptResetCurrentChat();
+  } else if (action === "icon") {
+    renderIconPickerContent();
+    iconPicker.classList.remove("hidden");
+  }
+});
+
+// Outside click closes the menu, but clicks on a different "⋯" button
+// toggle instead (handled by each button's own listener).
+document.addEventListener("click", (event) => {
+  if (!isAgentMenuOpen()) return;
+  if (event.target.closest("#agent-menu-pop") || event.target.closest(".agent-more")) return;
+  closeAgentMenu(false);
+});
+
+/* =====================================================================
+    Agent icon & accent picker
+    ===================================================================== */
 function closeIconPicker() {
   iconPicker.classList.add("hidden");
 }
@@ -159,17 +246,6 @@ function renderIconPickerContent() {
   }
 
   customIconInput.value = view.icon;
-
-  accentRow.replaceChildren();
-  for (const key of ACCENTS) {
-    const btn = el("button", "accent-swatch" + (accentOf(view).key === key ? " selected" : ""));
-    btn.type = "button";
-    btn.title = key;
-    const dot = el("span", "dot-" + key);
-    btn.appendChild(dot);
-    btn.addEventListener("click", () => selectAgentAccent(key));
-    accentRow.appendChild(btn);
-  }
 }
 
 function setOverride(field, value) {
@@ -189,12 +265,6 @@ function selectPresetIcon(key) {
 
 function applyCustomIconInput(value) {
   setOverride("icon", value.trim());
-}
-
-function selectAgentAccent(key) {
-  setOverride("accent", key);
-  renderIconPickerContent();
-  iconPicker.classList.remove("hidden");
 }
 
 function resetAgentVisuals() {

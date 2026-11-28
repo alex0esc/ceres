@@ -15,13 +15,11 @@ const promptEl = document.getElementById("prompt");
 const agentList = document.getElementById("agent-list");
 const agentSearch = document.getElementById("agent-search");
 const sendButton = document.getElementById("send-btn");
-const currentAgentEl = document.getElementById("current-agent");
-const headerDescEl = document.getElementById("header-agent-desc");
-const headerAvatarEl = document.getElementById("header-agent-avatar");
+
 const iconPicker = document.getElementById("icon-picker-popover");
 const iconPresetGrid = document.getElementById("icon-preset-grid");
 const customIconInput = document.getElementById("custom-icon-input");
-const accentRow = document.getElementById("accent-preset-row");
+
 const headerTokenCount = document.getElementById("header-token-count");
 const tooltipWordCount = document.getElementById("tooltip-word-count");
 const statePill = document.getElementById("working-indicator-pill");
@@ -65,7 +63,7 @@ let lastToolBlock = null;
 const ENTRY = { 0: "user", 1: "assistant", 2: "reasoning", 3: "tool_call", 4: "tool_result", 5: "image" };
 const TEXT_TYPES = new Set([0, 1, 2]);
 
-const ACCENTS = ["indigo", "emerald", "cyan", "violet", "rose", "amber"];
+const ACCENTS = ["moon"];
 
 const AGENT_ICONS = {
   orchestrator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 7L6.5 16.5M13.5 7l4 9.5M7.5 19h9"/></svg>`,
@@ -137,11 +135,6 @@ function formatTime(timestamp) {
 function stampMessageTime(row, timestamp) {
   const label = formatTime(timestamp);
   if (!row || !label || row.querySelector(".user-time, .msg-time")) return;
-  const userCol = row.querySelector(".user-col");
-  if (userCol) {
-    userCol.appendChild(el("div", "user-time", label));
-    return;
-  }
   const meta = row.querySelector(".msg-meta");
   if (meta) meta.appendChild(el("span", "msg-time", label));
 }
@@ -193,10 +186,11 @@ function closeLeftDrawer() {
 
 function setConnectionState(state) {
   syncPill.className = "sync-pill " + state;
+  syncLabel.hidden = state === "connected";
   syncLabel.textContent =
-    state === "connected" ? "connected" :
+    state === "connected" ? "" :
     state === "connecting" ? "connecting…" : "disconnected";
-  if (state !== "disconnected") syncPill.title = "WebSocket connection status";
+  syncPill.setAttribute("aria-label", "WebSocket " + state);
 }
 
 function setWorkingState(next) {
@@ -205,18 +199,13 @@ function setWorkingState(next) {
   statePill.className = "state-pill " + workingState;
   stateLabel.textContent = workingState;
 
-  if (workingState === "idle") {
-    stateVisual.innerHTML = `<span class="idle-dot"></span>`;
-  } else if (workingState === "busy") {
-    stateVisual.innerHTML = `<span class="busy-bars"><span></span><span></span><span></span><span></span></span>`;
-  } else {
-    stateVisual.innerHTML = `
-      <span class="compress-visual">
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="compress-arrow-left"><path d="M4 2l4 4-4 4"/></svg>
-        <span class="compress-core"></span>
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="compress-arrow-right"><path d="M8 2L4 6l4 4"/></svg>
-      </span>`;
-  }
+  stateVisual.innerHTML = '<svg class="orbit-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/><g class="orbit-satellite-wrap"><circle cx="8" cy="2.75" r="1.5" fill="currentColor"/></g></svg>';
+
+  const stopping = workingState !== "idle";
+  sendButton.classList.toggle("is-stop", stopping);
+  sendButton.setAttribute("aria-label", stopping ? "Stop agent" : "Send message");
+  sendButton.title = stopping ? "Stop agent (Esc)" : "";
+  if (stopping) sendButton.setAttribute("aria-keyshortcuts", "Escape"); else sendButton.removeAttribute("aria-keyshortcuts");
 }
 
 function setTokenCount(tokens) {
@@ -236,6 +225,14 @@ function updateWordCount() {
     if (matches) words += matches.length;
   }
   tooltipWordCount.textContent = words.toLocaleString("en-US");
+}
+
+function isOverlayOpen() {
+  const modal = document.getElementById("confirm-modal");
+  return !iconPicker.classList.contains("hidden") ||
+         !modal.classList.contains("hidden") ||
+         sidebar.classList.contains("open") ||
+         isAgentMenuOpen();
 }
 
 /* =====================================================================

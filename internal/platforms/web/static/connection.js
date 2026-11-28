@@ -162,7 +162,6 @@ async function sendMessage() {
   if ((!text && images.length === 0) || sending) return;
 
   sending = true;
-  sendButton.disabled = true;
   setWorkingState("busy");
   promptEl.value = "";
   promptEl.style.height = "auto";
@@ -177,23 +176,33 @@ async function sendMessage() {
     showError(`Could not send message: ${err.message}`);
   } finally {
     sending = false;
-    sendButton.disabled = false;
     promptEl.focus();
     pollStatus();
   }
 }
 
+let interruptPending = false;
 async function interruptAgent() {
+  if (interruptPending) return;
+  interruptPending = true;
   try {
     await postText("/interrupt", [], false);
   } catch (err) {
     showError(`Could not interrupt: ${err.message}`);
+  } finally {
+    interruptPending = false;
   }
 }
 
 composer.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
+});
+
+sendButton.addEventListener("click", () => {
+  if (workingState === "idle") composer.requestSubmit();
+  else interruptAgent();
+  promptEl.focus();
 });
 
 promptEl.addEventListener("input", () => {
@@ -237,6 +246,12 @@ promptEl.addEventListener("keydown", (event) => {
       event.preventDefault();
       if (commandAC.accept()) return;
     }
+  }
+
+  if (event.key === "Escape" && workingState !== "idle" && !isOverlayOpen()) {
+    event.preventDefault();
+    interruptAgent();
+    return;
   }
 
   if (event.key === "Enter" && !event.shiftKey) {

@@ -112,24 +112,16 @@ function clearEmptyState() {
 }
 
 function renderEmptyState() {
-  // Rebuild on every call: the agent name/description may only become known
+  // Rebuild on every call: the agent name may only become known
   // after /api/agents or the first snapshot arrives.
   const existing = document.getElementById("empty-state");
   if (existing) existing.remove();
   if (chatInner.childElementCount > 0) return;
 
-  const view = agentView(currentAgentName);
-  const accent = accentOf(view);
   const box = el("div", "empty-state");
   box.id = "empty-state";
-  const icon = el("div", "icon-box " + accent.cls);
-  icon.style.width = "48px";
-  icon.style.height = "48px";
-  icon.style.borderRadius = "16px";
-  icon.innerHTML = resolveAgentIcon(view.icon, view.name);
-  const heading = el("h2", "", currentAgentName || "Agent");
-  const desc = el("p", "", view.description || "Select an agent on the left and start the conversation.");
-  box.append(icon, heading, desc);
+  const name = currentAgentName || "the agent";
+  box.appendChild(el("p", "", "No messages yet"));
   chatInner.appendChild(box);
 }
 
@@ -248,24 +240,21 @@ function makeMessage(role, type, timestamp) {
 
   if (role === "user") {
     const row = el("div", "msg-row user");
-    const col = el("div", "user-col");
-    const body = el("div", "user-bubble md-content");
-    col.appendChild(body);
-    if (timeLabel) col.appendChild(el("div", "user-time", timeLabel));
-    row.appendChild(col);
+    const bodyCol = el("div", "msg-body");
+    const meta = el("div", "msg-meta");
+    const author = el("span", "msg-author");
+    author.textContent = "YOU";
+    meta.appendChild(author);
+    if (timeLabel) meta.appendChild(el("span", "msg-time", timeLabel));
+    const bubble = el("div", "msg-bubble md-content");
+    bodyCol.append(meta, bubble);
+    row.appendChild(bodyCol);
     chatInner.appendChild(row);
-    return { row, body };
+    return { row, body: bubble };
   }
 
   const isReasoning = role === "reasoning";
-  const view = agentView(currentAgentName);
-  const accent = accentOf(view);
   const row = el("div", "msg-row " + (isReasoning ? "reasoning" : "agent"));
-  if (!isReasoning) {
-    const avatar = el("div", "icon-box msg-avatar " + accent.cls);
-    avatar.innerHTML = resolveAgentIcon(view.icon, view.name);
-    row.appendChild(avatar);
-  }
 
   const bodyCol = el("div", "msg-body");
   const meta = el("div", "msg-meta");
@@ -356,9 +345,6 @@ function appendCommandResult(text) {
   closeToolGroup();
   clearEmptyState();
   const row = el("div", "msg-row command");
-  const avatar = el("div", "icon-box msg-avatar accent-indigo");
-  avatar.innerHTML = AGENT_ICONS.terminal;
-
   const col = el("div", "msg-body");
   const meta = el("div", "msg-meta");
   meta.append(
@@ -367,7 +353,7 @@ function appendCommandResult(text) {
   );
   const bubble = el("div", "msg-bubble md-content");
   col.append(meta, bubble);
-  row.append(avatar, col);
+  row.append(col);
   chatInner.appendChild(row);
 
   // One single bubble with full markdown / math / code rendering.
