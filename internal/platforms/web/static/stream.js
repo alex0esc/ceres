@@ -80,6 +80,8 @@ function applySnapshot(frame) {
   }
 
   if (streamBubble) renderMarkdownInto(streamBubble, rawMarkdown);
+  // The snapshot is the only place that builds the empty state. Rendering it
+  // earlier (on load, on agent switch, on reset) made the orbit flash briefly.
   renderEmptyState();
   updateWordCount();
   if (frame.compressing) setWorkingState("compressing");

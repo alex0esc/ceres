@@ -108,7 +108,6 @@
   --content-width: none;     /* width now comes from --gutter */
   --composer-width: none;
   --gutter: 20%;             /* free space on each side of the chat: 20 % | 60 % | 20 % */
-  --sb: 5px;                 /* scrollbar width, keeps text and prompt bar aligned */
 
   /* Surfaces */
   --bg-void: #000000;
@@ -218,11 +217,11 @@ button { color: inherit; }
 .sidebar-header {
   position: relative; height: 100px; flex-shrink: 0;
   padding: 0 18px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: flex-start;
 }
-/* The close button of the mobile drawer must not push the title off-centre. */
+/* The close button of the mobile drawer is pinned to the right edge. */
 .sidebar-header > .icon-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
-.sidebar-title-wrap { display: flex; align-items: center; justify-content: center; gap: 16px; min-width: 0; flex: 0 1 auto; }
+.sidebar-title-wrap { display: flex; align-items: center; justify-content: flex-start; gap: 16px; min-width: 0; flex: 0 1 auto; }
 .orbiter-logo { width: 58px; height: 58px; flex: 0 0 auto; }
 .sidebar-title { font-size: 29px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; }
 
@@ -238,6 +237,10 @@ button { color: inherit; }
 .sync-pill.disconnected { color: var(--text-muted); }
 .sync-pill.disconnected .sync-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-muted); }
 #sync-label[hidden] { display: none; }
+/* Connection state lives in the chat area's top-left corner; on small screens
+   it sits next to the agent-menu button. */
+#sync-pill { position: absolute; top: 12px; left: 12px; z-index: 20; }
+@media (max-width: 1023px) { #sync-pill { top: 28px; left: 72px; } }
 .sync-pill.connected, .sync-pill.connecting { display: none; }
 
 .sidebar-search { padding: 4px 18px 14px; flex-shrink: 0; position: relative; }
@@ -312,9 +315,9 @@ button { color: inherit; }
 
 /* Top-right actions: change icon, reasoning switch, clear history */
 .chat-actions {
-  position: absolute; top: 34px; right: 28px; z-index: 20;
+  position: absolute; top: 12px; right: 12px; z-index: 20;
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  padding: 6px; border-radius: var(--r-3);
+  padding: 4px; border-radius: var(--r-3);
   background: rgba(0, 0, 0, 0.94);
 }
 .actions-row { display: contents; }
@@ -349,17 +352,17 @@ button { color: inherit; }
 
 /* Working indicator */
 .state-pill {
-  display: flex; align-items: center; gap: 9px;
+  display: flex; align-items: center; gap: 10px;
   padding: 0; border: none; border-radius: 0; background: none;
-  font: 500 var(--fs-xs) var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+  font: 500 var(--fs-sm) var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
   user-select: none; transition: none;
 }
-.state-pill .state-visual { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.state-pill .state-visual { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .state-pill.idle { color: var(--text-muted); }
 .state-pill.busy { color: var(--text-primary); }
 .state-pill.compressing { color: var(--blue-bright); }
 
-.orbit-icon { width: 18px; height: 18px; color: var(--text-muted); }
+.orbit-icon { width: 22px; height: 22px; color: var(--text-muted); }
 .state-pill.busy .orbit-icon { color: var(--gold); }
 .state-pill.compressing .orbit-icon { color: var(--blue-bright); }
 .orbit-satellite-wrap { transform-box: view-box; transform-origin: 8px 8px; }
@@ -370,7 +373,7 @@ button { color: inherit; }
 .token-wrap { position: relative; }
 .token-badge {
   padding: 0; border: none; border-radius: 0; background: none;
-  font: 400 var(--fs-xs) var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+  font: 500 var(--fs-sm) var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-muted); font-variant-numeric: tabular-nums;
   cursor: default; user-select: none;
 }
@@ -390,7 +393,7 @@ button { color: inherit; }
 /* Status line */
 .status-line {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 4px 0; min-height: 28px;
+  padding: 10px 4px 0; min-height: 32px;
 }
 .status-line .token-tooltip { top: auto; bottom: calc(100% + 8px); right: 0; }
 
@@ -432,9 +435,11 @@ button { color: inherit; }
 /* =====================================================================
    CHAT
    ===================================================================== */
-.chat-scroll { flex: 1 1 auto; overflow-y: auto; scrollbar-gutter: stable; padding: 28px var(--gutter) 24px; }
+/* Scroll with the wheel/touch, but keep the scrollbar out of sight. */
+.chat-scroll { flex: 1 1 auto; overflow-y: auto; scrollbar-width: none; padding: 28px var(--gutter) 24px; }
+.chat-scroll::-webkit-scrollbar { display: none; }
 @media (max-width: 1023px) {
-  .chat-scroll { padding: 72px 18px 20px; scrollbar-gutter: auto; }
+  .chat-scroll { padding: 72px 18px 20px; }
   .chat-actions { top: 12px; right: 12px; display: flex; flex-direction: row; align-items: center; background: transparent; padding: 0; }
   .main::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 68px; background: var(--bg-void); border-bottom: 1px solid var(--border-subtle); z-index: 15; pointer-events: none; }
   .actions-row { display: flex; align-items: center; gap: 8px; }
@@ -535,7 +540,7 @@ button { color: inherit; }
 .tool-call-group > .tool-section:first-of-type { margin-top: 4px; }
 .tool-section-label { font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 5px; }
 .chat-image {
-  --image-size: 260px;
+  --image-size: 312px;
   display: block; width: var(--image-size); height: var(--image-size); max-width: 100%;
   object-fit: cover; object-position: top left; cursor: zoom-in; border-radius: var(--r-2);
 }
@@ -598,7 +603,7 @@ button { color: inherit; }
    ===================================================================== */
 .composer-wrap {
   flex-shrink: 0; z-index: 10;
-  padding: 0 calc(var(--gutter) + var(--sb)) 14px var(--gutter);
+  padding: 0 var(--gutter) 14px;
   position: relative;
   display: flex; justify-content: center;
 }
@@ -629,26 +634,28 @@ button { color: inherit; }
 
 .attachment-previews { order: 0; flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 2px; }
 .attachment-previews.hidden { display: none; }
-.attachment-preview { position: relative; width: 128px; height: 128px; border-radius: var(--r-2); border: 1px solid var(--border-strong); background: var(--bg-sidebar); }
+.attachment-preview { position: relative; width: 154px; height: 154px; border-radius: var(--r-2); border: 1px solid var(--border-strong); background: var(--bg-sidebar); }
 .attachment-thumb { display: block; width: 100%; height: 100%; border-radius: var(--r-2); object-fit: cover; object-position: top left; }
 .composer .attachment-remove {
-  position: absolute; top: -7px; right: -7px;
-  width: 22px; height: 22px; min-height: 0; padding: 0;
+  position: absolute; top: -9px; right: -9px;
+  width: 26px; height: 26px; min-height: 0; padding: 0;
   display: flex; align-items: center; justify-content: center; line-height: 0;
   border: 1px solid var(--border-strong); border-radius: 50%;
   background: var(--bg-elevated); color: var(--text-primary); cursor: pointer;
 }
-.composer .attachment-remove svg { display: block; width: 12px; height: 12px; }
+.composer .attachment-remove svg { display: block; width: 14px; height: 14px; }
 .composer .attachment-remove:hover { background: var(--blue); color: var(--text-primary); }
 
 /* Prompt text is as large as the generated text. */
 .composer textarea {
   order: 2;
-  flex: 1 1 0; min-width: 0; min-height: 40px; max-height: 280px;
+  flex: 1 1 0; min-width: 0; min-height: 40px; max-height: 336px;
   padding: 8px 10px; resize: none; border: none; outline: none;
   background: transparent; color: var(--text-primary);
   font-size: var(--fs-prose); line-height: 1.6;
+  scrollbar-width: none;
 }
+.composer textarea::-webkit-scrollbar { display: none; }
 .composer textarea::placeholder { color: var(--text-muted); }
 
 /* File picker (+): gold accent */

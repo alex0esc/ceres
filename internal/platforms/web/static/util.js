@@ -66,7 +66,9 @@ const TEXT_TYPES = new Set([0, 1, 2]);
 const ACCENTS = ["moon"];
 
 // Agent icon presets (24x24, stroke style). "satellite" is the default icon.
-const svgIcon = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+// Explicit size attributes keep icons small during the brief moment before
+// style.css applies; CSS still overrides them for the various icon contexts.
+const svgIcon = (body) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 
 const AGENT_ICONS = {
   satellite: svgIcon(`<path d="M13 7L9 3 5 7l4 4"/><path d="M17 11l4 4-4 4-4-4"/><path d="M8 12l4 4 6-6-4-4z"/><path d="M16 8l3-3"/><path d="M9 21a6 6 0 00-6-6"/>`),
@@ -239,7 +241,7 @@ function setConnectionState(state) {
   syncPill.setAttribute("aria-label", "WebSocket " + state);
 }
 
-const ORBIT_SVG = '<svg class="orbit-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/><g class="orbit-satellite-wrap"><circle cx="8" cy="2.75" r="1.5" fill="currentColor"/></g></svg>';
+const ORBIT_SVG = '<svg class="orbit-icon" width="22" height="22" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/><g class="orbit-satellite-wrap"><circle cx="8" cy="2.75" r="1.5" fill="currentColor"/></g></svg>';
 
 // Idempotent on purpose: it is called on every status poll, every send and
 // every stream event. Rebuilding the icon or resetting the class on each call

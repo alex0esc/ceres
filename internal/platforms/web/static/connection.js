@@ -43,7 +43,6 @@ function connect() {
         finalizeStream();
         resetToolBlocks();
         chatInner.replaceChildren();
-        renderEmptyState();
         setTokenCount(0);
         updateWordCount();
         break;
@@ -86,7 +85,6 @@ function reloadChat() {
   finalizeStream();
   resetToolBlocks();
   chatInner.replaceChildren();
-  renderEmptyState();
   updateWordCount();
   intentionalClose = true;
   if (ws) ws.close();
@@ -218,7 +216,7 @@ promptEl.addEventListener("input", () => {
   else if (wasExpanded && promptEl.value.trim() === "") composer.classList.remove("expanded");
 
   promptEl.style.height = "auto";
-  promptEl.style.height = Math.min(promptEl.scrollHeight, 250) + "px";
+  promptEl.style.height = Math.min(promptEl.scrollHeight, 300) + "px";
   if (commandAC) commandAC.update();
 });
 

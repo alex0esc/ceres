@@ -11,7 +11,8 @@ function init() {
   commandAC = new CommandAutocomplete(promptEl, cmdPopup);
   updateReasoningToggle();
   setWorkingState("idle");
-  renderEmptyState();
+  // Do not build the empty state here: the first snapshot arrives a few ms
+  // later and would immediately remove the orbit again, causing a flash.
   updateWordCount();
 
   document.addEventListener("click", closeIconPicker);

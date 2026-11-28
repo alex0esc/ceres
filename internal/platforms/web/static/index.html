@@ -46,20 +46,16 @@
             </g>
           </svg>
           <span class="sidebar-title">Ceres-Orbiter</span>
-          <span id="sync-pill" class="sync-pill connecting" title="WebSocket connection status">
-            <span class="sync-dot"></span>
-            <span id="sync-label">connecting…</span>
-          </span>
         </div>
         <button type="button" class="icon-btn lg-hidden" onclick="closeLeftDrawer()" title="Close sidebar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
 
       <div class="sidebar-search">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
         </svg>
         <input id="agent-search" type="text" oninput="renderAgentList()" placeholder="Filter agents…" autocomplete="off">
@@ -71,27 +67,32 @@
     <!-- ===================== Main chat ===================== -->
     <main class="main">
       <button id="menu-fab" type="button" class="menu-fab lg-hidden" onclick="toggleLeftDrawer()" title="Open agents">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 6h16M4 12h16M4 18h10"/>
         </svg>
       </button>
+
+      <span id="sync-pill" class="sync-pill connecting" title="WebSocket connection status">
+        <span class="sync-dot"></span>
+        <span id="sync-label">connecting…</span>
+      </span>
 
       <!-- Top-right actions, two rows: [change icon, clear history] and [reasoning switch] -->
       <div class="chat-actions">
         <div class="actions-row">
           <button id="change-icon-btn" type="button" class="action-btn" onclick="openIconPicker(event)" title="Change icon" aria-label="Change agent icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
             </svg>
           </button>
           <button id="clear-history-btn" type="button" class="action-btn" onclick="promptResetCurrentChat()" title="Clear history" aria-label="Clear history">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 7l-.87 12.14A2 2 0 0116.14 21H7.86a2 2 0 01-2-1.86L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
             </svg>
           </button>
         </div>
         <button id="reasoning-toggle-btn" type="button" class="reasoning-switch on" aria-pressed="true" onclick="toggleReasoning()" title="Show or hide reasoning">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9.5 3a3.5 3.5 0 00-3.2 4.9A3.5 3.5 0 005 14.5 3.5 3.5 0 008.5 18H11V3H9.5zM14.5 3a3.5 3.5 0 013.2 4.9A3.5 3.5 0 0119 14.5 3.5 3.5 0 0115.5 18H13V3h1.5z"/>
           </svg>
           <span class="rs-label">Reasoning</span>
@@ -118,7 +119,7 @@
             <input id="file-input" type="file" accept="image/*" multiple hidden>
             <div id="attachment-previews" class="attachment-previews hidden" aria-label="Attached images"></div>
             <button id="attach-btn" type="button" class="attach-btn" onclick="openFilePicker()" title="Attach files">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 5v14M5 12h14"/>
               </svg>
             </button>

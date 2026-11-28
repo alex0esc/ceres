@@ -116,7 +116,6 @@ function setCurrentAgent(name) {
   promptEl.placeholder = `Message ${currentAgentName || "agent"}…`;
   updateAgentHead();
   updateActiveHighlight();
-  renderEmptyState();
 }
 
 // Switching agents needs a fresh WebSocket; the server sends a new snapshot
@@ -135,7 +134,6 @@ function selectAgent(name) {
   stagedImages = [];
   renderStagedImages();
   chatInner.replaceChildren();
-  renderEmptyState();
   setTokenCount(0);
   updateWordCount();
   setWorkingState("idle");
