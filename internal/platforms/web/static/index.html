@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-  <title>Orbiter</title>
+  <title>Ceres-Orbiter</title>
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2040%2040%27%3E%3Cg%20opacity=%27.24%27%3E%3Ccircle%20cx=%2720%27%20cy=%2720%27%20r=%2717%27%20fill=%27%23d0c3c6%27/%3E%3Ccircle%20cx=%2714%27%20cy=%2713%27%20r=%272.6%27%20fill=%27%23000%27%20opacity=%27.45%27/%3E%3Ccircle%20cx=%2727.5%27%20cy=%2716.5%27%20r=%271.8%27%20fill=%27%23000%27%20opacity=%27.4%27/%3E%3Ccircle%20cx=%2718.5%27%20cy=%2729%27%20r=%273.2%27%20fill=%27%23000%27%20opacity=%27.4%27/%3E%3C/g%3E%3Cg%20transform=%27rotate(-14%2020%2020)%27%3E%3Cpath%20d=%27M20%2015V8.5%27%20stroke=%27%23d0c3c6%27%20stroke-width=%271.4%27%20stroke-linecap=%27round%27/%3E%3Cpath%20d=%27M16.5%209.5Q20%2012%2023.5%209.5%27%20fill=%27none%27%20stroke=%27%23d0c3c6%27%20stroke-width=%271.3%27%20stroke-linecap=%27round%27/%3E%3Ccircle%20cx=%2720%27%20cy=%277.5%27%20r=%271.8%27%20fill=%27%23d0c3c6%27/%3E%3Cpath%20d=%27M11%2020H16M24%2020H29%27%20stroke=%27%23d0c3c6%27%20stroke-width=%271.4%27%20stroke-linecap=%27round%27/%3E%3Crect%20x=%273.5%27%20y=%2714%27%20width=%277.5%27%20height=%2712%27%20rx=%271%27%20fill=%27%234B5782%27/%3E%3Crect%20x=%2729%27%20y=%2714%27%20width=%277.5%27%20height=%2712%27%20rx=%271%27%20fill=%27%234B5782%27/%3E%3Cpath%20d=%27M7.25%2015V25M4.5%2020H10M32.75%2015V25M30%2020H35%27%20fill=%27none%27%20stroke=%27%2322336F%27%20stroke-width=%271%27/%3E%3Crect%20x=%2716%27%20y=%2715%27%20width=%278%27%20height=%2710%27%20rx=%271.5%27%20fill=%27%23927418%27/%3E%3Cpath%20d=%27M17.2%2019.5H22.8%27%20stroke=%27%23d0c3c6%27%20stroke-width=%271%27%20opacity=%27.7%27/%3E%3C/g%3E%3C/svg%3E">
 
@@ -45,7 +45,7 @@
               <path d="M17.2 19.5H22.8" stroke="#d0c3c6" stroke-width="1" opacity=".7"/>
             </g>
           </svg>
-          <span class="sidebar-title">Orbiter</span>
+          <span class="sidebar-title">Ceres-Orbiter</span>
           <span id="sync-pill" class="sync-pill connecting" title="WebSocket connection status">
             <span class="sync-dot"></span>
             <span id="sync-label">connecting…</span>
@@ -59,22 +59,13 @@
       </div>
 
       <div class="sidebar-search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+        </svg>
         <input id="agent-search" type="text" oninput="renderAgentList()" placeholder="Filter agents…" autocomplete="off">
       </div>
 
       <div id="agent-list" class="agent-list"></div>
-
-      <div class="sidebar-footer">
-        <button id="reasoning-toggle-btn" type="button" class="theme-toggle" onclick="toggleReasoning()" title="Show or hide reasoning">
-          <span class="theme-toggle-left">
-            <svg class="icon-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9.5 3a3.5 3.5 0 00-3.2 4.9A3.5 3.5 0 005 14.5 3.5 3.5 0 008.5 18H11V3H9.5zM14.5 3a3.5 3.5 0 013.2 4.9A3.5 3.5 0 0119 14.5 3.5 3.5 0 0115.5 18H13V3h1.5z"/>
-            </svg>
-            <span>Show reasoning</span>
-          </span>
-          <span id="reasoning-state" class="toggle-state mono on">On</span>
-        </button>
-      </div>
     </aside>
 
     <!-- ===================== Main chat ===================== -->
@@ -85,7 +76,38 @@
         </svg>
       </button>
 
+      <!-- Top-right actions, two rows: [change icon, clear history] and [reasoning switch] -->
+      <div class="chat-actions">
+        <div class="actions-row">
+          <button id="change-icon-btn" type="button" class="action-btn" onclick="openIconPicker(event)" title="Change icon" aria-label="Change agent icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
+          <button id="clear-history-btn" type="button" class="action-btn" onclick="promptResetCurrentChat()" title="Clear history" aria-label="Clear history">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 7l-.87 12.14A2 2 0 0116.14 21H7.86a2 2 0 01-2-1.86L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </div>
+        <button id="reasoning-toggle-btn" type="button" class="reasoning-switch on" aria-pressed="true" onclick="toggleReasoning()" title="Show or hide reasoning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.5 3a3.5 3.5 0 00-3.2 4.9A3.5 3.5 0 005 14.5 3.5 3.5 0 008.5 18H11V3H9.5zM14.5 3a3.5 3.5 0 013.2 4.9A3.5 3.5 0 0119 14.5 3.5 3.5 0 0115.5 18H13V3h1.5z"/>
+          </svg>
+          <span class="rs-label">Reasoning</span>
+          <span class="rs-track" aria-hidden="true"><span class="rs-knob"></span></span>
+          <span id="reasoning-state" class="sr-only">On</span>
+        </button>
+      </div>
+
       <div id="chat" class="chat-scroll" aria-live="polite">
+        <header id="chat-head" class="chat-head">
+          <div id="head-icon" class="icon-box head-icon accent-moon" aria-hidden="true"></div>
+          <div class="agent-heading">
+            <h1 id="current-agent" class="agent-heading-name">Connecting…</h1>
+            <p id="header-agent-desc" class="agent-heading-desc"></p>
+          </div>
+        </header>
         <div id="chat-messages-inner" class="chat-inner"></div>
       </div>
 
@@ -148,8 +170,8 @@
   <div id="icon-picker-popover" class="popover hidden" onclick="event.stopPropagation()">
     <div class="popover-header">
       <div>
-        <div class="popover-title">Define agent icon</div>
-        <div class="popover-subtitle">Leave empty = automatic initials</div>
+        <div class="popover-title">Choose an icon</div>
+        <div class="popover-subtitle">Pick a preset, or paste an emoji, an image URL or SVG code below.</div>
       </div>
       <button type="button" class="popover-reset" onclick="resetAgentVisuals()" title="Reset to default">Reset</button>
     </div>
@@ -157,20 +179,15 @@
     <div>
       <div class="popover-label-row">
         <span class="mono-label">Icon presets</span>
-        <button type="button" class="link-btn" onclick="selectPresetIcon('')">Auto (initials)</button>
+        <button type="button" class="link-btn" onclick="selectPresetIcon('')">Use default</button>
       </div>
       <div id="icon-preset-grid" class="preset-grid"></div>
     </div>
 
     <div>
-      <label for="custom-icon-input" class="mono-label block-label">Custom (empty, emoji, key, URL or SVG)</label>
-      <input id="custom-icon-input" type="text" oninput="applyCustomIconInput(this.value)" placeholder="Empty for initials, bot, 🤖…" class="custom-icon-input">
+      <label for="custom-icon-input" class="mono-label block-label">Custom icon</label>
+      <input id="custom-icon-input" type="text" oninput="applyCustomIconInput(this.value)" placeholder="Emoji, preset name, image URL or &lt;svg&gt;…" class="custom-icon-input">
     </div>
-  </div>
-
-  <div id="agent-menu-pop" class="agent-menu-pop" hidden>
-    <button type="button" class="agent-menu-item" data-action="icon">Change icon</button>
-    <button type="button" class="agent-menu-item" data-action="clear">Clear history</button>
   </div>
 
   <div id="toast-container" class="toast-container"></div>
@@ -179,6 +196,7 @@
   <script defer src="/static/vendor/purify.min.js"></script>
   <script defer src="/static/vendor/highlight.min.js"></script>
   <script defer src="/static/util.js"></script>
+  <script defer src="/static/greetings.js"></script>
   <script defer src="/static/render.js"></script>
   <script defer src="/static/image.js"></script>
   <script defer src="/static/agents.js"></script>

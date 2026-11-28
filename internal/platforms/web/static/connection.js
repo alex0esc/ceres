@@ -32,9 +32,11 @@ function connect() {
       case "snapshot": applySnapshot(frame); break;
       case "delta": applyDelta(frame.entry); break;
       case "message_end":
+        // A message ending is not the same as the agent being done: it may go
+        // on with tool calls. Ask the server instead of flipping to idle here,
+        // otherwise the working indicator flickers and its animation restarts.
         finalizeStream();
         updateWordCount();
-        setWorkingState("idle");
         pollStatus();
         break;
       case "reset":
