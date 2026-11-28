@@ -120,12 +120,12 @@ function openImageViewer(img) {
   viewer.document.write(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${filename}</title>
 <style>
-  html,body{margin:0;height:100%;background:#0b0d12;color:#e5e7eb;font-family:system-ui,sans-serif}
+  html,body{margin:0;height:100%;background:#000;color:#d0c3c6;font-family:system-ui,sans-serif}
   body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px;box-sizing:border-box}
   img{max-width:100%;max-height:calc(100vh - 110px);object-fit:contain;border-radius:8px}
   .bar{display:flex;gap:10px}
-  .bar a,.bar button{padding:8px 14px;border-radius:10px;border:1px solid #374151;background:#4f46e5;color:#fff;font:600 13px system-ui,sans-serif;text-decoration:none;cursor:pointer}
-  .bar button{background:#1f2937}
+  .bar a,.bar button{padding:8px 14px;border-radius:10px;border:1px solid transparent;background:#927418;color:#000;font:600 13px system-ui,sans-serif;text-decoration:none;cursor:pointer}
+  .bar button{background:#111312;color:#d0c3c6;border-color:rgba(208,195,198,.22)}
 </style></head><body>
   <img src="${url}" alt="Full size image">
   <div class="bar"><a href="${url}" download="${filename}">Download</a><button onclick="window.close()">Close</button></div>
@@ -143,18 +143,18 @@ function makeImage(img) {
   return node;
 }
 
-// Images belong to a user prompt but must not sit inside the indigo text
+// Images belong to a user prompt but must not sit inside the text
 // bubble: put them first in the user column, before the text and the time.
 function appendUserImages(row, images) {
-  const col = row.querySelector(".user-col");
-  if (!col || images.length === 0) return;
-  const anchor = col.querySelector(".user-bubble") || col.querySelector(".user-time");
+  const bodyCol = row.querySelector(".msg-body");
+  if (!bodyCol || images.length === 0) return;
+  const anchor = bodyCol.querySelector(".msg-bubble");
   const wrap = el("div", "user-images");
   for (const img of images) {
     const holder = el("div", "user-image");
     holder.appendChild(makeImage(img));
     wrap.appendChild(holder);
   }
-  if (anchor) col.insertBefore(wrap, anchor);
-  else col.appendChild(wrap);
+  if (anchor) bodyCol.insertBefore(wrap, anchor);
+  else bodyCol.appendChild(wrap);
 }
